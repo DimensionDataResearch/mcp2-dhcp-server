@@ -98,6 +98,16 @@ func (service *Service) Initialize() error {
 		viper.GetString("network.end_ip"),
 	)
 
+	_, network, err := net.ParseCIDR(fmt.Sprintf("%s/%d",
+		service.VLAN.IPv4Range.BaseAddress,
+		service.VLAN.IPv4Range.PrefixSize,
+	))
+	if err != nil {
+		return err
+	}
+
+	service.DHCPOptions[dhcp.OptionSubnetMask] = network.Mask
+
 	return nil
 }
 
