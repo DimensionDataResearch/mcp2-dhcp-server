@@ -10,9 +10,9 @@ import (
 func main() {
 	fmt.Println("MCP 2.0 DHCP Server")
 
-	err := dhcp.ListenAndServe(
-		&DHCPHandler{},
-	)
+	err := dhcp.ListenAndServe(&DHCPHandler{
+		LeasesByMACAddress: make(map[string]*Lease),
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
