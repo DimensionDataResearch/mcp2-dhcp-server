@@ -26,7 +26,7 @@ func (service *Service) ServeDHCP(request dhcp.Packet, msgType dhcp.MessageType,
 
 	// Do know about a server in CloudControl with this MAC address?
 	server := service.FindServerByMACAddress(clientMACAddress)
-	if server != nil {
+	if server == nil {
 		return service.replyNAK(request)
 	}
 
