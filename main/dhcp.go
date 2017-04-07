@@ -4,6 +4,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/DimensionDataResearch/go-dd-cloud-compute/compute"
 	dhcp "github.com/krolaw/dhcp4"
 )
 
@@ -23,8 +24,14 @@ type Lease struct {
 func (service *Service) ServeDHCP(request dhcp.Packet, msgType dhcp.MessageType, options dhcp.Options) (response dhcp.Packet) {
 	clientMACAddress := request.CHAddr().String()
 
+	// Do know about a server in CloudControl with this MAC address?
+	server := service.FindServerByMACAddress(clientMACAddress)
+	if server != nil {
+		return service.replyNAK(request)
+	}
+
 	switch msgType {
-	// TODO: Handle dhcp.Discover
+	// TODO: Handle dhcp.Discover, etc
 
 	case dhcp.Request:
 		// Is this a renewal?
@@ -32,46 +39,35 @@ func (service *Service) ServeDHCP(request dhcp.Packet, msgType dhcp.MessageType,
 		if ok {
 			service.renewLease(existingLease)
 
-			return dhcp.ReplyPacket(request, dhcp.ACK, service.ServiceIP,
-				existingLease.IPAddress,
-				service.LeaseDuration,
-				service.DHCPOptions.SelectOrderOrAll(options[dhcp.OptionParameterRequestList]),
-			)
+			return service.replyACK(request, existingLease.IPAddress, options)
 		}
 
-		nextAvailableIP := service.DHCPRangeStart
+		// New lease
+		targetIP := getIPAddressFromMACAddress(server, clientMACAddress)
+		newLease := service.createLease(clientMACAddress, targetIP)
 
-		for {
-			if !dhcp.IPInRange(service.DHCPRangeStart, service.DHCPRangeEnd, nextAvailableIP) {
-				// We're out of addresses.
-				return dhcp.ReplyPacket(request, dhcp.NAK, service.ServiceIP,
-					nil,
-					0,
-					nil,
-				)
-			}
-
-			// Address in use?
-			_, ok := service.LeasesByIP[nextAvailableIP.String()]
-			if ok {
-				// Yep, so try next available.
-				nextAvailableIP = dhcp.IPAdd(nextAvailableIP, 1)
-
-				continue
-			}
-
-			// New lease
-			newLease := service.createLease(clientMACAddress, nextAvailableIP)
-
-			return dhcp.ReplyPacket(request, dhcp.ACK, service.ServiceIP,
-				newLease.IPAddress,
-				service.LeaseDuration,
-				service.DHCPOptions.SelectOrderOrAll(options[dhcp.OptionParameterRequestList]),
-			)
-		}
+		return service.replyACK(request, newLease.IPAddress, options)
 	}
 
-	return
+	return service.replyNAK(request)
+}
+
+// Create a ACK reply packet.
+func (service *Service) replyACK(request dhcp.Packet, targetIP net.IP, options dhcp.Options) (response dhcp.Packet) {
+	return dhcp.ReplyPacket(request, dhcp.ACK, service.ServiceIP,
+		targetIP,
+		service.LeaseDuration,
+		service.DHCPOptions.SelectOrderOrAll(options[dhcp.OptionParameterRequestList]),
+	)
+}
+
+// Create a NAK reply packet.
+func (service *Service) replyNAK(request dhcp.Packet) (response dhcp.Packet) {
+	return dhcp.ReplyPacket(request, dhcp.NAK, service.ServiceIP,
+		nil,
+		0,
+		nil,
+	)
 }
 
 func (service *Service) createLease(clientMACAddress string, ipAddress net.IP) Lease {
@@ -107,4 +103,23 @@ func (service *Service) pruneLeases() {
 	for _, macAddress := range expired {
 		delete(service.LeasesByMACAddress, macAddress)
 	}
+}
+
+func getIPAddressFromMACAddress(server *compute.Server, macAddress string) net.IP {
+	var targetAddress *string
+	primaryNetworkAdapter := server.Network.PrimaryAdapter
+	if *primaryNetworkAdapter.MACAddress == macAddress {
+		targetAddress = primaryNetworkAdapter.PrivateIPv4Address
+	} else {
+		for _, additionalNetworkAdapter := range server.Network.AdditionalNetworkAdapters {
+			if *additionalNetworkAdapter.MACAddress == macAddress {
+				targetAddress = additionalNetworkAdapter.PrivateIPv4Address
+			}
+		}
+	}
+	if targetAddress == nil {
+		return nil
+	}
+
+	return net.ParseIP(*targetAddress)
 }
