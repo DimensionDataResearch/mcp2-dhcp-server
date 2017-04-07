@@ -88,25 +88,56 @@ func (service *Service) Initialize() error {
 		return fmt.Errorf("Cannot find network domain with Id '%s'", service.VLAN.NetworkDomain.ID)
 	}
 
-	service.ServiceIP = net.ParseIP(
-		viper.GetString("network.service_ip"),
-	)
-	service.DHCPRangeStart = net.ParseIP(
-		viper.GetString("network.start_ip"),
-	)
-	service.DHCPRangeEnd = net.ParseIP(
-		viper.GetString("network.end_ip"),
-	)
-
-	_, network, err := net.ParseCIDR(fmt.Sprintf("%s/%d",
+	vlanCIDR := fmt.Sprintf("%s/%d",
 		service.VLAN.IPv4Range.BaseAddress,
 		service.VLAN.IPv4Range.PrefixSize,
-	))
+	)
+	_, vlanNetwork, err := net.ParseCIDR(vlanCIDR)
 	if err != nil {
 		return err
 	}
 
-	service.DHCPOptions[dhcp.OptionSubnetMask] = network.Mask
+	service.DHCPOptions[dhcp.OptionSubnetMask] = vlanNetwork.Mask
+
+	service.ServiceIP = net.ParseIP(
+		viper.GetString("network.service_ip"),
+	)
+	if !vlanNetwork.Contains(service.ServiceIP) {
+		return fmt.Errorf("Service IP address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
+			service.ServiceIP.String(),
+			vlanCIDR,
+			service.VLAN.Name,
+		)
+	}
+
+	service.DHCPRangeStart = net.ParseIP(
+		viper.GetString("network.start_ip"),
+	)
+	if !vlanNetwork.Contains(service.DHCPRangeStart) {
+		return fmt.Errorf("DHCP range start address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
+			service.ServiceIP.String(),
+			vlanCIDR,
+			service.VLAN.Name,
+		)
+	}
+
+	service.DHCPRangeEnd = net.ParseIP(
+		viper.GetString("network.end_ip"),
+	)
+	if !vlanNetwork.Contains(service.DHCPRangeEnd) {
+		return fmt.Errorf("DHCP range end address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
+			service.ServiceIP.String(),
+			vlanCIDR,
+			service.VLAN.Name,
+		)
+	}
+
+	if !dhcp.IPLess(service.DHCPRangeStart, service.DHCPRangeEnd) {
+		return fmt.Errorf("DHCP range start address %s greater than or equal to DHCP range start address %s",
+			service.DHCPRangeStart,
+			service.DHCPRangeEnd,
+		)
+	}
 
 	return nil
 }

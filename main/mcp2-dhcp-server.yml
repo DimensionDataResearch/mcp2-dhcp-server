@@ -1,0 +1,10 @@
+mcp:
+  user: "my_mcp_user"
+  password: "my_mpc_password"
+  region: "AU"
+
+network:
+  vlan_id: "MyVLAN"
+  service_ip: 192.168.70.12
+  start_ip: 192.168.70.20
+  end_ip: 192.168.70.30
