@@ -52,7 +52,7 @@ func (service *Service) ServeDHCP(request dhcp.Packet, msgType dhcp.MessageType,
 	return service.replyNAK(request)
 }
 
-// Create a ACK reply packet.
+// Create an ACK reply packet.
 func (service *Service) replyACK(request dhcp.Packet, targetIP net.IP, options dhcp.Options) (response dhcp.Packet) {
 	return dhcp.ReplyPacket(request, dhcp.ACK, service.ServiceIP,
 		targetIP,
@@ -77,7 +77,6 @@ func (service *Service) createLease(clientMACAddress string, ipAddress net.IP) L
 		Expires:    time.Now().Add(service.LeaseDuration),
 	}
 	service.LeasesByMACAddress[clientMACAddress] = newLease
-	service.LeasesByIP[ipAddress.String()] = newLease
 
 	return *newLease
 }

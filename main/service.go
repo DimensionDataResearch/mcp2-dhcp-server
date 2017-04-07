@@ -33,7 +33,6 @@ type Service struct {
 	DHCPRangeEnd   net.IP
 
 	LeasesByMACAddress map[string]*Lease
-	LeasesByIP         map[string]*Lease
 	LeaseDuration      time.Duration
 
 	stateLock     *sync.Mutex
