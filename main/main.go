@@ -8,11 +8,17 @@ import (
 )
 
 func main() {
-	fmt.Println("MCP 2.0 DHCP Server")
+	service := NewService()
+	err := service.Initialize()
+	if err != nil {
+		panic(err)
+	}
 
-	err := dhcp.ListenAndServe(&DHCPHandler{
-		LeasesByMACAddress: make(map[string]*Lease),
-	})
+	// Start polling CloudControl for server metadata.
+	service.Start()
+
+	fmt.Println("MCP 2.0 DHCP server is running.")
+	err = dhcp.ListenAndServe(service)
 	if err != nil {
 		log.Fatal(err)
 	}
