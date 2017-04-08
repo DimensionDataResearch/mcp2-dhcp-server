@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net"
 	"time"
 
@@ -20,36 +21,128 @@ type Lease struct {
 	Expires time.Time
 }
 
+// IsExpired determines whether the lease has expired.
+func (lease *Lease) IsExpired() bool {
+	return time.Now().Sub(lease.Expires) >= 0
+}
+
 // ServeDHCP handles an incoming DHCP request.
 func (service *Service) ServeDHCP(request dhcp.Packet, msgType dhcp.MessageType, options dhcp.Options) (response dhcp.Packet) {
 	clientMACAddress := request.CHAddr().String()
 
 	// Do know about a server in CloudControl with this MAC address?
 	server := service.FindServerByMACAddress(clientMACAddress)
-	if server == nil {
-		return service.replyNAK(request)
-	}
 
 	switch msgType {
-	// TODO: Handle dhcp.Discover, etc
+	case dhcp.Discover:
+		log.Printf("Discover message from client with MAC address '%s'.", clientMACAddress)
+
+		if server == nil {
+			log.Printf("MAC address '%s' does not correspond to a server in CloudControl (no reply will be sent).", clientMACAddress)
+
+			return service.noReply()
+		}
+
+		targetIP, ok := getIPAddressFromMACAddress(server, clientMACAddress)
+		if !ok {
+			log.Printf("MAC address '%s' does not correspond to a server in CloudControl (no reply will be sent).", clientMACAddress)
+
+			return service.noReply()
+		}
+
+		return service.replyOffer(request, targetIP, options)
 
 	case dhcp.Request:
+		log.Printf("Request message from client with MAC address %s.", clientMACAddress)
+
+		if server == nil {
+			log.Printf("MAC address '%s' does not correspond to a server in CloudControl (no reply will be sent).", clientMACAddress)
+
+			return service.replyNAK(request)
+		}
+
 		// Is this a renewal?
 		existingLease, ok := service.LeasesByMACAddress[clientMACAddress]
-		if ok {
+		if ok && !existingLease.IsExpired() {
+			log.Printf("Renew lease on IPv4 address %s for server '%s' (MAC address %s) and send ACK reply.",
+				server.Name,
+				existingLease.IPAddress.String(),
+				clientMACAddress,
+			)
+
 			service.renewLease(existingLease)
 
 			return service.replyACK(request, existingLease.IPAddress, options)
 		}
 
 		// New lease
-		targetIP := getIPAddressFromMACAddress(server, clientMACAddress)
+		targetIP, ok := getIPAddressFromMACAddress(server, clientMACAddress)
+		if !ok {
+			log.Printf("Cannot resolve network adapter in server '%s' (%s) with MAC address %s; send NAK reply.",
+				server.Name,
+				server.ID,
+				clientMACAddress,
+			)
+
+			return service.replyNAK(request)
+		}
+
+		log.Printf("Create lease on IPv4 address %s for server '%s' (MAC address %s) and send ACK reply.",
+			server.Name,
+			existingLease.IPAddress.String(),
+			clientMACAddress,
+		)
 		newLease := service.createLease(clientMACAddress, targetIP)
 
 		return service.replyACK(request, newLease.IPAddress, options)
+
+	case dhcp.Release:
+		log.Printf("Release message from client with MAC address %s.", clientMACAddress)
+
+		if server == nil {
+			log.Printf("MAC address '%s' does not correspond to a server in CloudControl (no reply will be sent).", clientMACAddress)
+
+			return service.replyNAK(request)
+		}
+
+		existingLease, ok := service.LeasesByMACAddress[clientMACAddress]
+		if ok && !existingLease.IsExpired() {
+			log.Printf("Server '%s' (%s) requested requested termination of lease on IPv4 address %s (MAC address %s).",
+				server.Name,
+				server.ID,
+				existingLease.IPAddress.String(),
+				clientMACAddress,
+			)
+
+			service.renewLease(existingLease)
+
+			return service.replyACK(request, existingLease.IPAddress, options)
+		}
+
+		log.Printf("Server '%s' (%s) requested requested termination of expired or non-existent lease (MAC address %s). Ignored.",
+			server.Name,
+			server.ID,
+			clientMACAddress,
+		)
+
+		return service.noReply() // No reply is necessary for Release.
 	}
 
 	return service.replyNAK(request)
+}
+
+// Create an empty reply packet (i.e. no reply should be sent)
+func (service *Service) noReply() dhcp.Packet {
+	return dhcp.Packet{}
+}
+
+// Create an Offer reply packet.
+func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, options dhcp.Options) (response dhcp.Packet) {
+	return dhcp.ReplyPacket(request, dhcp.Offer, service.ServiceIP,
+		targetIP,
+		service.LeaseDuration,
+		service.DHCPOptions.SelectOrderOrAll(options[dhcp.OptionParameterRequestList]),
+	)
 }
 
 // Create an ACK reply packet.
@@ -104,7 +197,7 @@ func (service *Service) pruneLeases() {
 	}
 }
 
-func getIPAddressFromMACAddress(server *compute.Server, macAddress string) net.IP {
+func getIPAddressFromMACAddress(server *compute.Server, macAddress string) (targetIP net.IP, ok bool) {
 	var targetAddress *string
 	primaryNetworkAdapter := server.Network.PrimaryAdapter
 	if *primaryNetworkAdapter.MACAddress == macAddress {
@@ -117,8 +210,11 @@ func getIPAddressFromMACAddress(server *compute.Server, macAddress string) net.I
 		}
 	}
 	if targetAddress == nil {
-		return nil
+		return
 	}
 
-	return net.ParseIP(*targetAddress)
+	targetIP = net.ParseIP(*targetAddress)
+	ok = true
+
+	return
 }
