@@ -44,7 +44,7 @@ If you're trying to boot CoreOS, consider using [coreos-ipxe-server](https://git
 
 Deploy an Ubuntu 16.x server attached to the target VLAN (other distros might work but have not been tested):
 
-1. `apt-get install -y git built-essential liblzma-dev mkisofs tftpd-hpa`.
+1. `apt-get install -y git build-essential liblzma-dev mkisofs tftpd-hpa`.
 2. `mkdir -p /usr/local/src/ipxe`
 3. `cd /usr/local/src/ipxe`
 4. `git clone git://git.ipxe.org/ipxe.git .`
