@@ -27,6 +27,10 @@ type Service struct {
 	ServiceIP   net.IP
 	DHCPOptions dhcp.Options
 
+	EnableIPXE     bool
+	PXEBootImage   string // PXE boot file (TFTP)
+	IPXEBootScript string // iPXE boot script (HTTP)
+
 	ServersByMACAddress map[string]compute.Server
 
 	DHCPRangeStart net.IP
@@ -36,7 +40,7 @@ type Service struct {
 	LeaseDuration      time.Duration
 
 	stateLock     *sync.Mutex
-	refreshTimer  *time.Timer
+	refreshTimer  *time.Ticker
 	cancelRefresh chan bool
 }
 
@@ -46,19 +50,26 @@ func NewService() *Service {
 		ServersByMACAddress: make(map[string]compute.Server),
 		LeasesByMACAddress:  make(map[string]*Lease),
 		LeaseDuration:       24 * time.Hour,
-		DHCPOptions: dhcp.Options{
-			dhcp.OptionSubnetMask: []byte{255, 255, 255, 0}, // TODO: Get from config.
-		},
-		stateLock: &sync.Mutex{},
+		DHCPOptions:         dhcp.Options{},
+		stateLock:           &sync.Mutex{},
 	}
 }
 
 // Initialize performs initial configuration of the Service.
 func (service *Service) Initialize() error {
+	// Defaults
+	viper.SetDefault("ipxe.enable", false)
+	viper.SetDefault("ipxe.boot_image", "undionly.kpxe")
+
+	// Environment variables.
 	viper.BindEnv("MCP_USER", "mcp.user")
 	viper.BindEnv("MCP_PASSWORD", "mcp.password")
 	viper.BindEnv("MCP_REGION", "mcp.region")
-	viper.BindEnv("MCP_VLAN_ID", "network.vlan_id")
+	viper.BindEnv("MCP_DHCP_VLAN_ID", "network.vlan_id")
+	viper.BindEnv("MCP_DHCP_SERVICE_IP", "network.service_ip")
+	viper.BindEnv("MCP_IPXE_ENABLE", "ipxe.enable")
+	viper.BindEnv("MCP_IPXE_BOOT_IMAGE", "ipxe.boot_image")
+	viper.BindEnv("MCP_IPXE_BOOT_SCRIPT", "ipxe.boot_script")
 
 	viper.SetConfigType("yaml")
 	viper.SetConfigFile("mcp2-dhcp-server.yml")
@@ -109,6 +120,19 @@ func (service *Service) Initialize() error {
 		)
 	}
 
+	service.EnableIPXE = viper.GetBool("ipxe.enable")
+	if service.EnableIPXE {
+		service.PXEBootImage = viper.GetString("ipxe.boot_image")
+		if len(service.PXEBootImage) == 0 {
+			return fmt.Errorf("ipxe.boot_image / MCP_IPXE_BOOT_IMAGE must be set if ipxe.enable / MCP_IPXE_ENABLE is true")
+		}
+
+		service.IPXEBootScript = viper.GetString("ipxe.boot_script")
+		if len(service.IPXEBootScript) == 0 {
+			return fmt.Errorf("ipxe.boot_script / MCP_IPXE_BOOT_SCRIPT must be set if ipxe.enable / MCP_IPXE_ENABLE is true")
+		}
+	}
+
 	service.DHCPRangeStart = net.ParseIP(
 		viper.GetString("network.start_ip"),
 	)
@@ -143,11 +167,11 @@ func (service *Service) Initialize() error {
 
 // Start polling CloudControl for server metadata.
 func (service *Service) Start() {
-	service.stateLock.Lock()
-	defer service.stateLock.Unlock()
-
 	// Warm up caches.
+	log.Printf("Initialising ARP cache...")
 	arp.CacheUpdate()
+
+	log.Printf("Initialising CloudControl metadata cache...")
 	err := service.RefreshServerMetadata()
 	if err != nil {
 		log.Printf("Error refreshing servers: %s",
@@ -155,11 +179,13 @@ func (service *Service) Start() {
 		)
 	}
 
+	log.Printf("All caches initialised.")
+
 	// Periodically scan the ARP cache so we can resolve MAC addresses from client IPs.
 	arp.AutoRefresh(5 * time.Second)
 
 	service.cancelRefresh = make(chan bool, 1)
-	service.refreshTimer = time.NewTimer(10 * time.Second)
+	service.refreshTimer = time.NewTicker(10 * time.Second)
 
 	go func() {
 		cancelRefresh := service.cancelRefresh
