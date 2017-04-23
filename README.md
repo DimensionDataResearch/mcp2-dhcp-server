@@ -51,11 +51,11 @@ Deploy an Ubuntu 16.x server attached to the target VLAN (other distros might wo
 5. `cd src`
 6. `make`
 7. `cp bin/undionly.kpxe /var/lib/tftpboot`
-8. Place a copy of the `mcp2-dhcp-server` executable on this machine.
+8. Place a copy of the `mcp2-dhcp-server` [executable](https://github.com/DimensionDataResearch/mcp2-dhcp-server/releases/download/v0.1-alpha1/mcp2-dhcp-server) on this machine.
 
 If you're using `coreos-ipxe-server`:
 
-1. Place a copy of the `coreos-ipxe-server` executable on this machine.
+1. Place a copy of the `coreos-ipxe-server` [executable](https://github.com/kelseyhightower/coreos-ipxe-server/releases/download/v0.3.0/coreos-ipxe-server-0.3.0-linux-amd64) on this machine.
 2. `export COREOS_IPXE_SERVER_DATA_DIR=/opt/coreos-ipxe-server`
 3. `mkdir -p $COREOS_IPXE_SERVER_DATA_DIR/{configs,images,profiles,sshkeys}`
 4. `mkdir -p $COREOS_IPXE_SERVER_DATA_DIR/images/amd64-usr/310.1.0`
