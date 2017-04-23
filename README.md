@@ -28,4 +28,4 @@ ipxe:
 * `boot_image` is the name of the initial iPXE boot image file sent to regular PXE clients.  
 PXE clients will load this image via TFTP (from the server where `mcp2-dhcp-server` is running).  
 When they load this image, iPXE will send a second discovery packet with a user class of `iPXE`.
-* `boot_script` is the URL of the iPXE script sent to iPXE clients.
+* `boot_script` is the URL of the iPXE script (HTTP or TFTP) sent to iPXE clients.
