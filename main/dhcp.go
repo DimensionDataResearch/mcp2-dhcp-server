@@ -6,6 +6,8 @@ import (
 	"net"
 	"time"
 
+	"strings"
+
 	"github.com/DimensionDataResearch/go-dd-cloud-compute/compute"
 	dhcp "github.com/krolaw/dhcp4"
 )
@@ -58,7 +60,7 @@ func (service *Service) ServeDHCP(request dhcp.Packet, msgType dhcp.MessageType,
 
 		targetIP, ok := getIPAddressFromMACAddress(server, clientMACAddress)
 		if !ok {
-			log.Printf("MAC address '%s' does not correspond to a server in CloudControl (no reply will be sent).", clientMACAddress)
+			log.Printf("MAC address '%s' does not correspond to a network adapter in CloudControl (no reply will be sent).", clientMACAddress)
 
 			return service.noReply()
 		}
@@ -158,19 +160,11 @@ func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, options
 		service.DHCPOptions.SelectOrderOrAll(options[dhcp.OptionParameterRequestList]),
 	)
 
-	if service.EnableIPXE {
+	if service.EnableIPXE && isPXEClient(options) {
 		// Mark us as PXE-capable (legacy BIOS boot).
 		reply.AddOption(dhcp.OptionVendorClassIdentifier,
 			[]byte("PXEServer"),
 		)
-
-		// Consider making iPXE server IP configurable (user may want to host it elsewhere).
-		// If so, use:
-		/*
-			reply.AddOption(dhcp.OptionSwapServer,
-				[]byte(service.IPXEServerIP),
-			)
-		*/
 
 		userClass, ok := options[dhcp.OptionUserClass]
 		if ok {
@@ -191,10 +185,12 @@ func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, options
 					log.Printf("Warning - iPXE client requested boot file, but no iPXE boot script has been configured (ipxe.boot_script / MCP_IPXE_BOOT_SCRIPT).")
 				}
 			} else {
-				log.Printf("Client with MAC address '%s' has unknown user class '%s'.\n",
+				log.Printf("Client with MAC address '%s' has unknown user class '%s'; no reply will be sent.\n",
 					request.CHAddr().String(),
 					string(userClass),
 				)
+
+				return service.noReply()
 			}
 		} else {
 			// This is a PXE client; direct them to load the standard PXE boot image.
@@ -229,15 +225,7 @@ func (service *Service) replyACK(request dhcp.Packet, targetIP net.IP, options d
 		service.DHCPOptions.SelectOrderOrAll(options[dhcp.OptionParameterRequestList]),
 	)
 
-	if service.EnableIPXE {
-		// Consider making iPXE server IP configurable (user may want to host it elsewhere).
-		// If so, use:
-		/*
-			reply.AddOption(dhcp.OptionSwapServer,
-				[]byte(service.IPXEServerIP),
-			)
-		*/
-
+	if service.EnableIPXE && isPXEClient(options) {
 		userClass, ok := options[dhcp.OptionUserClass]
 		if ok {
 			if string(userClass) == "iPXE" {
@@ -341,4 +329,16 @@ func getIPAddressFromMACAddress(server *compute.Server, macAddress string) (targ
 	ok = true
 
 	return
+}
+
+func isPXEClient(requestOptions dhcp.Options) bool {
+	vendorClassIdentifier, ok := requestOptions[dhcp.OptionVendorClassIdentifier]
+	if !ok {
+		return false
+	}
+
+	return strings.HasPrefix(
+		string(vendorClassIdentifier),
+		"PXEClient:",
+	)
 }

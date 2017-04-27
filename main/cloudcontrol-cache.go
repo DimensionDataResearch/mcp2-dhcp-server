@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"os"
 	"strings"
 
@@ -28,14 +29,21 @@ func (service *Service) RefreshServerMetadata() error {
 
 		for _, server := range servers.Items {
 			// Ignore servers that are being deployed or destroyed.
-			if server.Network.PrimaryAdapter.PrivateIPv4Address == nil {
+			primaryNetworkAdapter := server.Network.PrimaryAdapter
+			if primaryNetworkAdapter.PrivateIPv4Address == nil {
 				continue
 			}
 
 			primaryMACAddress := strings.ToLower(
-				*server.Network.PrimaryAdapter.MACAddress,
+				*primaryNetworkAdapter.MACAddress,
 			)
-			service.ServersByMACAddress[primaryMACAddress] = server
+			serversByMACAddress[primaryMACAddress] = server
+
+			log.Printf("\tMAC %s -> %s (%s)\n",
+				primaryMACAddress,
+				*primaryNetworkAdapter.PrivateIPv4Address,
+				server.Name,
+			)
 
 			for _, additionalNetworkAdapter := range server.Network.AdditionalNetworkAdapters {
 				// Ignore network adapters that are being deployed or destroyed.
@@ -46,7 +54,13 @@ func (service *Service) RefreshServerMetadata() error {
 				additionalMACAddress := strings.ToLower(
 					*additionalNetworkAdapter.MACAddress,
 				)
-				service.ServersByMACAddress[additionalMACAddress] = server
+				serversByMACAddress[additionalMACAddress] = server
+
+				log.Printf("\tMAC address %s -> %s (%s)\n",
+					additionalMACAddress,
+					*additionalNetworkAdapter.PrivateIPv4Address,
+					server.Name,
+				)
 			}
 		}
 

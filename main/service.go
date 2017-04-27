@@ -229,10 +229,10 @@ func (service *Service) Start() {
 	log.Printf("All caches initialised.")
 
 	// Periodically scan the ARP cache so we can resolve MAC addresses from client IPs.
-	arp.AutoRefresh(5 * time.Second)
+	arp.AutoRefresh(10 * time.Second)
 
 	service.cancelRefresh = make(chan bool, 1)
-	service.refreshTimer = time.NewTicker(10 * time.Second)
+	service.refreshTimer = time.NewTicker(30 * time.Second)
 
 	go func() {
 		cancelRefresh := service.cancelRefresh
