@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"time"
@@ -8,6 +9,18 @@ import (
 	"github.com/DimensionDataResearch/go-dd-cloud-compute/compute"
 	dhcp "github.com/krolaw/dhcp4"
 )
+
+// StaticReservation represents a static DHCP address reservation.
+type StaticReservation struct {
+	// The machine's MAC address.
+	MACAddress string
+
+	// The machine's host name.
+	HostName string
+
+	// The machine's IPv4 address.
+	IPAddress net.IP
+}
 
 // Lease represents a DHCP address lease.
 type Lease struct {
@@ -35,7 +48,7 @@ func (service *Service) ServeDHCP(request dhcp.Packet, msgType dhcp.MessageType,
 
 	switch msgType {
 	case dhcp.Discover:
-		log.Printf("Discover message from client with MAC address '%s'.", clientMACAddress)
+		log.Printf("Discover message from client with MAC address '%s' (IP '%s').", clientMACAddress, request.CIAddr().String())
 
 		if server == nil {
 			log.Printf("MAC address '%s' does not correspond to a server in CloudControl (no reply will be sent).", clientMACAddress)
@@ -89,7 +102,7 @@ func (service *Service) ServeDHCP(request dhcp.Packet, msgType dhcp.MessageType,
 
 		log.Printf("Create lease on IPv4 address %s for server '%s' (MAC address %s) and send ACK reply.",
 			server.Name,
-			existingLease.IPAddress.String(),
+			targetIP.String(),
 			clientMACAddress,
 		)
 		newLease := service.createLease(clientMACAddress, targetIP)
@@ -133,6 +146,7 @@ func (service *Service) ServeDHCP(request dhcp.Packet, msgType dhcp.MessageType,
 
 // Create an empty reply packet (i.e. no reply should be sent)
 func (service *Service) noReply() dhcp.Packet {
+	fmt.Println("NOREPLY")
 	return dhcp.Packet{}
 }
 
@@ -153,19 +167,36 @@ func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, options
 			)
 		*/
 
+		// Mark us as PXE-capable (legacy BIOS boot).
+		reply.AddOption(dhcp.OptionVendorClassIdentifier,
+			[]byte("PXEServer"),
+		)
+
+		reply.AddOption(dhcp.OptionTFTPServerName,
+			[]byte(service.ServiceIP.String()),
+		)
+
 		userClass, ok := options[dhcp.OptionUserClass]
-		if ok && string(userClass) == "iPXE" {
-			// This is an iPXE client; direct them to load the iPXE boot script.
-			log.Printf("Client with MAC address '%s' is an iPXE client; directing them to boot script '%s'.",
-				request.CHAddr().String(),
-				service.IPXEBootScript,
-			)
-			if service.IPXEBootScript != "" {
-				reply.AddOption(dhcp.OptionBootFileName,
-					[]byte(service.IPXEBootScript),
+		if ok {
+			if string(userClass) == "iPXE" {
+				// This is an iPXE client; direct them to load the iPXE boot script.
+				log.Printf("Client with MAC address '%s' is an iPXE client; directing them to boot script 'tftp://%s/%s'.",
+					request.CHAddr().String(),
+					service.ServiceIP,
+					service.IPXEBootScript,
 				)
+				if service.IPXEBootScript != "" {
+					reply.AddOption(dhcp.OptionBootFileName,
+						[]byte(service.IPXEBootScript),
+					)
+				} else {
+					log.Printf("Warning - iPXE client requested boot file, but no iPXE boot script has been configured (ipxe.boot_script / MCP_IPXE_BOOT_SCRIPT).")
+				}
 			} else {
-				log.Printf("Warning - iPXE client requested boot file, but no iPXE boot script has been configured (ipxe.boot_script / MCP_IPXE_BOOT_SCRIPT).")
+				log.Printf("Client with MAC address '%s' has unknown user class '%s'.\n",
+					request.CHAddr().String(),
+					string(userClass),
+				)
 			}
 		} else {
 			// This is a PXE client; direct them to load the standard PXE boot image.

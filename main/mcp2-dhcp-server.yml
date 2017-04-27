@@ -4,7 +4,12 @@ mcp:
   region: "AU"
 
 network:
+  interface: eth0
   vlan_id: "MyVLAN"
   service_ip: 192.168.70.12
   start_ip: 192.168.70.20
   end_ip: 192.168.70.30
+  static_reservations:
+    - mac: 00:0C:29:C7:38:B9
+      name: coreos-node-1
+      ipv4: 192.168.70.20

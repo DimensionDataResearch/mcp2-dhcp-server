@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 
 	"github.com/DimensionDataResearch/go-dd-cloud-compute/compute"
 )
@@ -31,7 +32,9 @@ func (service *Service) RefreshServerMetadata() error {
 				continue
 			}
 
-			primaryMACAddress := *server.Network.PrimaryAdapter.MACAddress
+			primaryMACAddress := strings.ToLower(
+				*server.Network.PrimaryAdapter.MACAddress,
+			)
 			service.ServersByMACAddress[primaryMACAddress] = server
 
 			for _, additionalNetworkAdapter := range server.Network.AdditionalNetworkAdapters {
@@ -40,7 +43,9 @@ func (service *Service) RefreshServerMetadata() error {
 					continue
 				}
 
-				additionalMACAddress := *additionalNetworkAdapter.MACAddress
+				additionalMACAddress := strings.ToLower(
+					*additionalNetworkAdapter.MACAddress,
+				)
 				service.ServersByMACAddress[additionalMACAddress] = server
 			}
 		}
@@ -57,6 +62,25 @@ func (service *Service) RefreshServerMetadata() error {
 func (service *Service) FindServerByMACAddress(macAddress string) *compute.Server {
 	service.stateLock.Lock()
 	defer service.stateLock.Unlock()
+
+	macAddress = strings.ToLower(macAddress)
+
+	// Fake up a matching server if there's a matching static address reservation.
+	staticReservation, ok := service.StaticReservationsByMACAddress[macAddress]
+	if ok {
+		serverMACAddress := macAddress
+		serverPrivateIPv4Address := staticReservation.IPAddress.String()
+
+		return &compute.Server{
+			Name: staticReservation.HostName,
+			Network: compute.VirtualMachineNetwork{
+				PrimaryAdapter: compute.VirtualMachineNetworkAdapter{
+					MACAddress:         &serverMACAddress,
+					PrivateIPv4Address: &serverPrivateIPv4Address,
+				},
+			},
+		}
+	}
 
 	server, ok := service.ServersByMACAddress[macAddress]
 	if ok {

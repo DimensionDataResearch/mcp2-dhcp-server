@@ -24,9 +24,10 @@ func main() {
 	// Start polling CloudControl for server metadata.
 	service.Start()
 
-	fmt.Println("MCP 2.0 DHCP server is running.")
-	err = dhcp.ListenAndServe(service)
+	err = dhcp.ListenAndServeIf(service.InterfaceName, service)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	fmt.Println("MCP 2.0 DHCP server is running.")
 }

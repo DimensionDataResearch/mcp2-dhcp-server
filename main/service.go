@@ -11,6 +11,8 @@ import (
 	"github.com/mostlygeek/arp"
 	"github.com/spf13/viper"
 
+	"strings"
+
 	dhcp "github.com/krolaw/dhcp4"
 )
 
@@ -19,6 +21,8 @@ type Service struct {
 	McpUser     string
 	McpPassword string
 	McpRegion   string
+
+	InterfaceName string
 
 	Client        *compute.Client
 	NetworkDomain *compute.NetworkDomain
@@ -31,7 +35,8 @@ type Service struct {
 	PXEBootImage   string // PXE boot file (TFTP)
 	IPXEBootScript string // iPXE boot script (HTTP)
 
-	ServersByMACAddress map[string]compute.Server
+	ServersByMACAddress            map[string]compute.Server
+	StaticReservationsByMACAddress map[string]StaticReservation
 
 	DHCPRangeStart net.IP
 	DHCPRangeEnd   net.IP
@@ -47,11 +52,12 @@ type Service struct {
 // NewService creates new Service state.
 func NewService() *Service {
 	return &Service{
-		ServersByMACAddress: make(map[string]compute.Server),
-		LeasesByMACAddress:  make(map[string]*Lease),
-		LeaseDuration:       24 * time.Hour,
-		DHCPOptions:         dhcp.Options{},
-		stateLock:           &sync.Mutex{},
+		ServersByMACAddress:            make(map[string]compute.Server),
+		StaticReservationsByMACAddress: make(map[string]StaticReservation),
+		LeasesByMACAddress:             make(map[string]*Lease),
+		LeaseDuration:                  24 * time.Hour,
+		DHCPOptions:                    dhcp.Options{},
+		stateLock:                      &sync.Mutex{},
 	}
 }
 
@@ -65,6 +71,7 @@ func (service *Service) Initialize() error {
 	viper.BindEnv("MCP_USER", "mcp.user")
 	viper.BindEnv("MCP_PASSWORD", "mcp.password")
 	viper.BindEnv("MCP_REGION", "mcp.region")
+	viper.BindEnv("MCP_DHCP_INTERFACE", "network.interface")
 	viper.BindEnv("MCP_DHCP_VLAN_ID", "network.vlan_id")
 	viper.BindEnv("MCP_DHCP_SERVICE_IP", "network.service_ip")
 	viper.BindEnv("MCP_IPXE_ENABLE", "ipxe.enable")
@@ -112,12 +119,10 @@ func (service *Service) Initialize() error {
 	service.ServiceIP = net.ParseIP(
 		viper.GetString("network.service_ip"),
 	)
-	if !vlanNetwork.Contains(service.ServiceIP) {
-		return fmt.Errorf("Service IP address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
-			service.ServiceIP.String(),
-			vlanCIDR,
-			service.VLAN.Name,
-		)
+
+	service.InterfaceName = viper.GetString("network.interface")
+	if len(service.InterfaceName) == 0 {
+		return fmt.Errorf("network.interface / MCP_DHCP_INTERFACE is required")
 	}
 
 	service.EnableIPXE = viper.GetBool("ipxe.enable")
@@ -136,30 +141,70 @@ func (service *Service) Initialize() error {
 	service.DHCPRangeStart = net.ParseIP(
 		viper.GetString("network.start_ip"),
 	)
-	if !vlanNetwork.Contains(service.DHCPRangeStart) {
-		return fmt.Errorf("DHCP range start address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
-			service.ServiceIP.String(),
-			vlanCIDR,
-			service.VLAN.Name,
-		)
-	}
 
 	service.DHCPRangeEnd = net.ParseIP(
 		viper.GetString("network.end_ip"),
 	)
-	if !vlanNetwork.Contains(service.DHCPRangeEnd) {
-		return fmt.Errorf("DHCP range end address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
-			service.ServiceIP.String(),
-			vlanCIDR,
-			service.VLAN.Name,
-		)
+
+	// Static reservations (for testing only)
+	staticReservationsValue := viper.Get("network.static_reservations")
+	if staticReservationsValue != nil {
+		staticReservations := staticReservationsValue.([]interface{})
+		for _, staticReservationValue := range staticReservations {
+			staticReservation := staticReservationValue.(map[interface{}]interface{})
+
+			reservation := StaticReservation{
+				MACAddress: strings.ToLower(
+					staticReservation["mac"].(string),
+				),
+				HostName: staticReservation["name"].(string),
+				IPAddress: net.ParseIP(
+					staticReservation["ipv4"].(string),
+				),
+			}
+			fmt.Printf("Adding static IP reservation for %s (%s): %s\n",
+				reservation.MACAddress,
+				reservation.HostName,
+				reservation.IPAddress,
+			)
+			service.StaticReservationsByMACAddress[reservation.MACAddress] = reservation
+		}
+	} else {
+		fmt.Printf("No static reservations.\n")
 	}
 
-	if !dhcp.IPLess(service.DHCPRangeStart, service.DHCPRangeEnd) {
-		return fmt.Errorf("DHCP range start address %s greater than or equal to DHCP range start address %s",
-			service.DHCPRangeStart,
-			service.DHCPRangeEnd,
-		)
+	// Ignore IP range if we have static reservations.
+	if len(service.StaticReservationsByMACAddress) == 0 {
+		if !vlanNetwork.Contains(service.DHCPRangeStart) {
+			return fmt.Errorf("DHCP range start address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
+				service.ServiceIP.String(),
+				vlanCIDR,
+				service.VLAN.Name,
+			)
+		}
+
+		if !vlanNetwork.Contains(service.ServiceIP) {
+			return fmt.Errorf("Service IP address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
+				service.ServiceIP.String(),
+				vlanCIDR,
+				service.VLAN.Name,
+			)
+		}
+
+		if !dhcp.IPLess(service.DHCPRangeStart, service.DHCPRangeEnd) {
+			return fmt.Errorf("DHCP range start address %s greater than or equal to DHCP range start address %s",
+				service.DHCPRangeStart,
+				service.DHCPRangeEnd,
+			)
+		}
+
+		if !vlanNetwork.Contains(service.DHCPRangeEnd) {
+			return fmt.Errorf("DHCP range end address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
+				service.ServiceIP.String(),
+				vlanCIDR,
+				service.VLAN.Name,
+			)
+		}
 	}
 
 	return nil
