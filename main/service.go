@@ -56,8 +56,10 @@ func NewService() *Service {
 		StaticReservationsByMACAddress: make(map[string]StaticReservation),
 		LeasesByMACAddress:             make(map[string]*Lease),
 		LeaseDuration:                  24 * time.Hour,
-		DHCPOptions:                    dhcp.Options{},
-		stateLock:                      &sync.Mutex{},
+		DHCPOptions: dhcp.Options{
+			dhcp.OptionDomainNameServer: []byte{8, 8, 8, 8},
+		},
+		stateLock: &sync.Mutex{},
 	}
 }
 
@@ -118,7 +120,7 @@ func (service *Service) Initialize() error {
 
 	service.ServiceIP = net.ParseIP(
 		viper.GetString("network.service_ip"),
-	)
+	).To4()
 
 	service.InterfaceName = viper.GetString("network.interface")
 	if len(service.InterfaceName) == 0 {

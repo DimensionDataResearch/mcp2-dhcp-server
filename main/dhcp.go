@@ -159,6 +159,11 @@ func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, options
 	)
 
 	if service.EnableIPXE {
+		// Mark us as PXE-capable (legacy BIOS boot).
+		reply.AddOption(dhcp.OptionVendorClassIdentifier,
+			[]byte("PXEServer"),
+		)
+
 		// Consider making iPXE server IP configurable (user may want to host it elsewhere).
 		// If so, use:
 		/*
@@ -167,25 +172,18 @@ func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, options
 			)
 		*/
 
-		// Mark us as PXE-capable (legacy BIOS boot).
-		reply.AddOption(dhcp.OptionVendorClassIdentifier,
-			[]byte("PXEServer"),
-		)
-
-		reply.AddOption(dhcp.OptionTFTPServerName,
-			[]byte(service.ServiceIP.String()),
-		)
-
 		userClass, ok := options[dhcp.OptionUserClass]
 		if ok {
 			if string(userClass) == "iPXE" {
 				// This is an iPXE client; direct them to load the iPXE boot script.
-				log.Printf("Client with MAC address '%s' is an iPXE client; directing them to boot script 'tftp://%s/%s'.",
+				log.Printf("Client with MAC address '%s' is an iPXE client; directing them to boot script '%s'.",
 					request.CHAddr().String(),
-					service.ServiceIP,
 					service.IPXEBootScript,
 				)
 				if service.IPXEBootScript != "" {
+					reply.SetFile(
+						[]byte(service.IPXEBootScript),
+					)
 					reply.AddOption(dhcp.OptionBootFileName,
 						[]byte(service.IPXEBootScript),
 					)
@@ -200,26 +198,84 @@ func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, options
 			}
 		} else {
 			// This is a PXE client; direct them to load the standard PXE boot image.
-			log.Printf("Client with MAC address '%s' is a regular PXE (or non-PXE) client; directing them to iPXE boot image '%s'.",
+			log.Printf("Client with MAC address '%s' is a regular PXE (or non-PXE) client; directing them to iPXE boot image 'tftp://%s/%s'.",
 				request.CHAddr().String(),
+				service.ServiceIP,
 				service.PXEBootImage,
+			)
+
+			reply.SetFile(
+				[]byte(service.PXEBootImage),
 			)
 			reply.AddOption(dhcp.OptionBootFileName,
 				[]byte(service.PXEBootImage),
 			)
+			reply.AddOption(dhcp.OptionTFTPServerName,
+				[]byte(service.ServiceIP.String()),
+			)
 		}
 	}
+
+	reply.SetSIAddr(service.ServiceIP)
 
 	return reply
 }
 
 // Create an ACK reply packet.
 func (service *Service) replyACK(request dhcp.Packet, targetIP net.IP, options dhcp.Options) (response dhcp.Packet) {
-	return dhcp.ReplyPacket(request, dhcp.ACK, service.ServiceIP,
+	reply := dhcp.ReplyPacket(request, dhcp.ACK, service.ServiceIP,
 		targetIP,
 		service.LeaseDuration,
 		service.DHCPOptions.SelectOrderOrAll(options[dhcp.OptionParameterRequestList]),
 	)
+
+	if service.EnableIPXE {
+		// Consider making iPXE server IP configurable (user may want to host it elsewhere).
+		// If so, use:
+		/*
+			reply.AddOption(dhcp.OptionSwapServer,
+				[]byte(service.IPXEServerIP),
+			)
+		*/
+
+		userClass, ok := options[dhcp.OptionUserClass]
+		if ok {
+			if string(userClass) == "iPXE" {
+				// This is an iPXE client; direct them to load the iPXE boot script.
+				log.Printf("Client with MAC address '%s' is an iPXE client; directing them to boot script '%s'.",
+					request.CHAddr().String(),
+					service.IPXEBootScript,
+				)
+				if service.IPXEBootScript != "" {
+					reply.SetFile(
+						[]byte(service.IPXEBootScript),
+					)
+				} else {
+					log.Printf("Warning - iPXE client requested boot file, but no iPXE boot script has been configured (ipxe.boot_script / MCP_IPXE_BOOT_SCRIPT).")
+				}
+			} else {
+				log.Printf("Client with MAC address '%s' has unknown user class '%s'.\n",
+					request.CHAddr().String(),
+					string(userClass),
+				)
+			}
+		} else {
+			// This is a PXE client; direct them to load the standard PXE boot image.
+			log.Printf("Client with MAC address '%s' is a regular PXE (or non-PXE) client; directing them to iPXE boot image 'tftp://%s/%s'.",
+				request.CHAddr().String(),
+				service.ServiceIP,
+				service.PXEBootImage,
+			)
+
+			reply.SetFile(
+				[]byte(service.PXEBootImage),
+			)
+		}
+	}
+
+	reply.SetSIAddr(service.ServiceIP)
+
+	return reply
 }
 
 // Create a NAK reply packet.
