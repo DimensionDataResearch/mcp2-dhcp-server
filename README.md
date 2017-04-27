@@ -13,7 +13,8 @@ mcp:
   region: "AU"
 
 network:
-  vlan_id: "MyVLAN"
+  interface: eth0 # Specify the interface to listen on (for now, only a single interface is supported).
+  vlan_id: "42837f37-a0fd-4544-a800-416a1d33f672"
   service_ip: 192.168.70.12
   start_ip: 192.168.70.20
   end_ip: 192.168.70.30
@@ -69,7 +70,7 @@ If you're using `coreos-ipxe-server`:
 #cloud-config
 
 ssh_authorized_keys:
-    - ssh-rsa AAAAB3Nza...
+    - ssh-rsa AAAAB3Nza... # Place your real SSH key here, or remove this section.
 coreos:
   etcd:
     addr: $private_ipv4:4001
