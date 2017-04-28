@@ -32,6 +32,7 @@ type Service struct {
 	DHCPOptions dhcp.Options
 
 	EnableIPXE     bool
+	TFTPServerName string
 	PXEBootImage   string // PXE boot file (TFTP)
 	IPXEBootScript string // iPXE boot script (HTTP)
 
@@ -43,6 +44,8 @@ type Service struct {
 
 	LeasesByMACAddress map[string]*Lease
 	LeaseDuration      time.Duration
+
+	EnableDebugLogging bool
 
 	stateLock     *sync.Mutex
 	refreshTimer  *time.Ticker
@@ -66,6 +69,7 @@ func NewService() *Service {
 // Initialize performs initial configuration of the Service.
 func (service *Service) Initialize() error {
 	// Defaults
+	viper.SetDefault("debug", false)
 	viper.SetDefault("ipxe.enable", false)
 	viper.SetDefault("ipxe.boot_image", "undionly.kpxe")
 
@@ -73,6 +77,7 @@ func (service *Service) Initialize() error {
 	viper.BindEnv("MCP_USER", "mcp.user")
 	viper.BindEnv("MCP_PASSWORD", "mcp.password")
 	viper.BindEnv("MCP_REGION", "mcp.region")
+	viper.BindEnv("MCP_DHCP_DEBUG", "debug")
 	viper.BindEnv("MCP_DHCP_INTERFACE", "network.interface")
 	viper.BindEnv("MCP_DHCP_VLAN_ID", "network.vlan_id")
 	viper.BindEnv("MCP_DHCP_SERVICE_IP", "network.service_ip")
@@ -87,6 +92,8 @@ func (service *Service) Initialize() error {
 	if err != nil {
 		panic(err)
 	}
+
+	service.EnableDebugLogging = viper.GetBool("debug")
 
 	service.McpRegion = viper.GetString("mcp.region")
 	service.McpUser = viper.GetString("mcp.user")
@@ -129,6 +136,8 @@ func (service *Service) Initialize() error {
 
 	service.EnableIPXE = viper.GetBool("ipxe.enable")
 	if service.EnableIPXE {
+		service.TFTPServerName = service.ServiceIP.String()
+
 		service.PXEBootImage = viper.GetString("ipxe.boot_image")
 		if len(service.PXEBootImage) == 0 {
 			return fmt.Errorf("ipxe.boot_image / MCP_IPXE_BOOT_IMAGE must be set if ipxe.enable / MCP_IPXE_ENABLE is true")
@@ -214,12 +223,15 @@ func (service *Service) Initialize() error {
 
 // Start polling CloudControl for server metadata.
 func (service *Service) Start() {
+	service.acquireStateLock("Start")
+	defer service.releaseStateLock("Start")
+
 	// Warm up caches.
 	log.Printf("Initialising ARP cache...")
 	arp.CacheUpdate()
 
 	log.Printf("Initialising CloudControl metadata cache...")
-	err := service.RefreshServerMetadata()
+	err := service.refreshServerMetadataInternal(false /* we already have the state lock */)
 	if err != nil {
 		log.Printf("Error refreshing servers: %s",
 			err.Error(),
@@ -244,7 +256,9 @@ func (service *Service) Start() {
 				return // Stopped
 
 			case <-refreshTimer:
-				log.Printf("Refreshing server MAC addresses...")
+				if service.EnableDebugLogging {
+					log.Printf("Refreshing server MAC addresses...")
+				}
 
 				err := service.RefreshServerMetadata()
 				if err != nil {
@@ -253,7 +267,9 @@ func (service *Service) Start() {
 					)
 				}
 
-				log.Printf("Refreshed server MAC addresses.")
+				if service.EnableDebugLogging {
+					log.Printf("Refreshed server MAC addresses.")
+				}
 			}
 		}
 	}()
@@ -261,8 +277,8 @@ func (service *Service) Start() {
 
 // Stop polling CloudControl for server metadata.
 func (service *Service) Stop() {
-	service.stateLock.Lock()
-	defer service.stateLock.Unlock()
+	service.acquireStateLock("Stop")
+	defer service.releaseStateLock("Stop")
 
 	if service.cancelRefresh != nil {
 		service.cancelRefresh <- true
@@ -271,4 +287,20 @@ func (service *Service) Stop() {
 
 	service.refreshTimer.Stop()
 	service.refreshTimer = nil
+}
+
+func (service *Service) acquireStateLock(reason string) {
+	if service.EnableDebugLogging {
+		log.Printf("Acquire state lock (%s).", reason)
+	}
+
+	service.stateLock.Lock()
+}
+
+func (service *Service) releaseStateLock(reason string) {
+	if service.EnableDebugLogging {
+		log.Printf("Release state lock (%s).", reason)
+	}
+
+	service.stateLock.Unlock()
 }

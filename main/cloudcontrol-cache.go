@@ -10,9 +10,25 @@ import (
 
 // RefreshServerMetadata refreshes the map of MAC addresses to server metadata.
 func (service *Service) RefreshServerMetadata() error {
-	service.stateLock.Lock()
-	defer service.stateLock.Unlock()
+	return service.refreshServerMetadataInternal(true)
+}
+func (service *Service) refreshServerMetadataInternal(acquireStateLock bool) error {
+	serversByMACAddress, err := service.readServerMetadata()
+	if err != nil {
+		return err
+	}
 
+	if acquireStateLock {
+		service.acquireStateLock("refreshServerMetadataInternal")
+		defer service.releaseStateLock("refreshServerMetadataInternal")
+	}
+	service.ServersByMACAddress = serversByMACAddress
+
+	return nil
+}
+
+// readServerMetadata creates a map of MAC addresses to server metadata from CloudControl.
+func (service *Service) readServerMetadata() (map[string]compute.Server, error) {
 	serversByMACAddress := make(map[string]compute.Server)
 
 	page := compute.DefaultPaging()
@@ -21,7 +37,7 @@ func (service *Service) RefreshServerMetadata() error {
 	for {
 		servers, err := service.Client.ListServersInNetworkDomain(service.NetworkDomain.ID, page)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if servers.IsEmpty() {
 			break
@@ -39,11 +55,13 @@ func (service *Service) RefreshServerMetadata() error {
 			)
 			serversByMACAddress[primaryMACAddress] = server
 
-			log.Printf("\tMAC %s -> %s (%s)\n",
-				primaryMACAddress,
-				*primaryNetworkAdapter.PrivateIPv4Address,
-				server.Name,
-			)
+			if service.EnableDebugLogging {
+				log.Printf("\tMAC %s -> %s (%s)\n",
+					primaryMACAddress,
+					*primaryNetworkAdapter.PrivateIPv4Address,
+					server.Name,
+				)
+			}
 
 			for _, additionalNetworkAdapter := range server.Network.AdditionalNetworkAdapters {
 				// Ignore network adapters that are being deployed or destroyed.
@@ -56,26 +74,26 @@ func (service *Service) RefreshServerMetadata() error {
 				)
 				serversByMACAddress[additionalMACAddress] = server
 
-				log.Printf("\tMAC address %s -> %s (%s)\n",
-					additionalMACAddress,
-					*additionalNetworkAdapter.PrivateIPv4Address,
-					server.Name,
-				)
+				if service.EnableDebugLogging {
+					log.Printf("\tMAC address %s -> %s (%s)\n",
+						additionalMACAddress,
+						*additionalNetworkAdapter.PrivateIPv4Address,
+						server.Name,
+					)
+				}
 			}
 		}
 
 		page.Next()
 	}
 
-	service.ServersByMACAddress = serversByMACAddress
-
-	return nil
+	return serversByMACAddress, nil
 }
 
 // FindServerByMACAddress finds the server (if any) posessing a network adapter with the specified MAC address.
 func (service *Service) FindServerByMACAddress(macAddress string) *compute.Server {
-	service.stateLock.Lock()
-	defer service.stateLock.Unlock()
+	service.acquireStateLock("FindServerByMACAddress")
+	defer service.releaseStateLock("FindServerByMACAddress")
 
 	macAddress = strings.ToLower(macAddress)
 
