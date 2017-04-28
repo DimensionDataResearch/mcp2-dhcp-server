@@ -12,19 +12,19 @@ import (
 func main() {
 	log.SetOutput(os.Stdout)
 
-	fmt.Println("MCP 2.0 DHCP server is initialising...")
+	log.Printf("MCP 2.0 DHCP server " + ProductVersion)
+
+	fmt.Println("Server is initialising...")
 	service := NewService()
 	err := service.Initialize()
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("MCP 2.0 DHCP server is starting...")
-
-	// Start polling CloudControl for server metadata.
+	fmt.Println("Server is starting...")
 	service.Start()
 
-	fmt.Println("MCP 2.0 DHCP server is running.")
+	fmt.Println("Server is running.")
 	err = dhcp.ListenAndServeIf(service.InterfaceName, service)
 	if err != nil {
 		log.Fatal(err)
