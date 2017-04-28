@@ -1,0 +1,128 @@
+----
+
+- hosts: all
+
+  tasks:
+    - name: Install prerequisites
+      apt:
+        name: "{{ item.dest }}"
+        state: present
+        update_cache: yes
+      with_items:
+        - git
+        - build-essential
+        - liblzma-dev
+        - mkisofs
+        - tftpd-hpa
+
+    - name: Get iPXE
+      git:
+        repo: git://git.ipxe.org/ipxe.git
+        dest: /usr/local/src/ipxe
+        recursive: yes
+
+    - name: Build iPXE
+      command: make
+      args:
+        chdir: /usr/local/src/ipxe/src
+
+    - name: Install iPXE
+      command: cp /usr/local/src/ipxe/src/bin/undionly.kpxe /var/lib/tftpboot
+
+    - name: Install coreos-ipxe-server
+      get_url:
+        url: "https://github.com/kelseyhightower/coreos-ipxe-server/releases/download/v{{ coreos_ipxe_server_version }}/coreos-ipxe-server-{{ coreos_ipxe_server_version }}-linux-amd64"
+        dest: /usr/local/bin/coreos-ipxe-server
+        owner: root
+        group: root
+        mode: u=rwx, g=rx, o=
+
+    - name: Configure coreos-ipxe-server
+      template:
+        src: coreos-ipxe-server.defaults.j2
+        dest: /etc/default/coreos-ipxe-server
+
+    - name: Create coreos-ipxe-server directories
+      file:
+        dest: "{{coreos_ipxe_server_data_dir}}/{{ item.dest }}"
+        state: directory
+        owner: root
+        group: root
+        mode: u=rwx, g=rx, o=
+      with_items:
+        - configs
+        - images
+        - profiles
+        - sshkeys
+
+    - name: Create default cloud-config for coreos-ipxe-server
+      copy:
+        src: development.yml
+        dest: "{{ coreos_ipxe_server_data_dir }}/configs/development.yml"
+
+    - name: Create default profile for coreos-ipxe-server
+      copy:
+        src: development.json
+        dest: "{{ coreos_ipxe_server_data_dir }}/profiles/development.json"
+
+    - name: Copy default SSH key for coreos-ipxe-server
+      copy:
+        src: "{{ coreos_default_ssh_key_file }}"
+        dest: "{{ coreos_ipxe_server_data_dir }}/sshkeys/coreos.pub"
+
+    - name: Download default images for coreos-ipxe-server
+      get_url:
+        url: "http://storage.core-os.net/coreos/amd64-usr/310.1.0/{{ item.dest }}"
+        dest: "{{ coreos_ipxe_server_data_dir }}/images/amd64-usr/310.1.0/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: u=rw, g=r, o=
+      with_items:
+        - coreos_production_pxe_image.cpio.gz
+        - coreos_production_pxe.vmlinuz
+
+    - name: Create coreos-ipxe-server service (systemd)
+      template:
+        src: coreos-ipxe-server.service.j2
+        dest: /lib/systemd/system/coreos-ipxe-server.service
+        owner: root
+        group: root
+        mode: u=rwx, g=rx, o=
+
+    - name: Start coreos-ipxe-server service (systemd)
+      systemd:
+        name: coreos-ipxe-server
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    - name: Install mcp2-dhcp-server
+      get_url:
+        url: "https://github.com/DimensionDataResearch/mcp2-dhcp-server/releases/download/v{{ mcp2_dhcp_server_version }}/mcp2-dhcp-server"
+        dest: /usr/local/bin/mcp2-dhcp-server
+        owner: root
+        group: root
+        mode: u=rwx, g=rx, o=
+
+    - name: Configure mcp2-dhcp-server
+      template:
+        src: mcp2-dhcp-server.yml.j2
+        dest: /etc/mcp2-dhcp-server.yml
+        owner: root
+        group: root
+        mode: u=rwx, g=rx, o=
+
+    - name: Create mcp2-dhcp-server service (systemd)
+      copy:
+        src: mcp2-dhcp-server.service
+        dest: /lib/systemd/system/mcp2-dhcp-server.service
+        owner: root
+        group: root
+        mode: u=rwx, g=rx, o=
+
+    - name: Start mcp2-dhcp-server service (systemd)
+      systemd:
+        name: coreos-ipxe-server
+        enabled: yes
+        state: started
+        daemon_reload: yes

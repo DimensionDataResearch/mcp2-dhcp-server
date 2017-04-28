@@ -1,0 +1,10 @@
+[Unit]
+Description="MCP 2.0 DHCP Server"
+Documentation="https://github.com/DimensionDataResearch/mcp2-dhcp-server#readme"
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/mcp2-dhcp-server.yml
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/mcp2-dhcp-server

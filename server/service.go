@@ -86,7 +86,8 @@ func (service *Service) Initialize() error {
 	viper.BindEnv("MCP_IPXE_BOOT_SCRIPT", "ipxe.boot_script")
 
 	viper.SetConfigType("yaml")
-	viper.SetConfigFile("mcp2-dhcp-server.yml")
+	viper.AddConfigPath("./mcp2-dhcp-server.yml")
+	viper.AddConfigPath("/etc/mcp2-dhcp-server.yml")
 
 	err := viper.ReadInConfig()
 	if err != nil {

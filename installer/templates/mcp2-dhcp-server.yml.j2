@@ -1,0 +1,16 @@
+mcp:
+  user: "{{ mcp_user }}"
+  password: "{{ mcp_password }}"
+  region: "{{ mcp_region }}"
+
+network:
+  interface:  "{{ dhcp_interface }}"
+  vlan_id:    "{{ mcp_vlan_id }}"
+  service_ip: "{{ private_ipv4 }}"
+  start_ip:   "{{ dhcp_ip_start }}"
+  end_ip:     "{{ dhcp_ip_end }}"
+
+ipxe:
+  enable:       true
+  boot_image:   "{{ ipxe_boot_image }}"
+  boot_script:  "{{ ipxe_boot_script }}"

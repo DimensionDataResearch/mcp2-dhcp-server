@@ -17,11 +17,11 @@ from collections import defaultdict
 import json
 import os
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
-DEFAULT_ROOT = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), "../../terraform"
-))
+DEFAULT_ROOT = os.path.abspath(
+    os.path.dirname(__file__)
+)
 
 
 def get_state_files(root):

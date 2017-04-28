@@ -1,0 +1,14 @@
+[Unit]
+Description="CoreOS iPXE Server"
+Documentation="https://github.com/kelseyhightower/coreos-ipxe-server#readme"
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/default/coreos-ipxe-server
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/coreos-ipxe-server
+ExecStart=/usr/local/bin/coreos-ixpe-server
+
+[Install]
+WantedBy=multi-user.target

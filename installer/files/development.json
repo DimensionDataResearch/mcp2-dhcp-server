@@ -1,0 +1,6 @@
+{
+	"cloud_config": "development",
+	"rootfstype": "btrfs",
+	"sshkey": "coreos",
+	"version": "310.1.0"
+}
