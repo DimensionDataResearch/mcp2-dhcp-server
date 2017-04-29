@@ -1,19 +1,36 @@
 package main
 
 import (
+	"fmt"
 	"log"
-	"os"
+	"net"
 	"strings"
 
 	"github.com/DimensionDataResearch/go-dd-cloud-compute/compute"
 )
+
+// ServerMetadata represents metadata for a CloudControl server.
+type ServerMetadata struct {
+	ID               string
+	Name             string
+	IPv4ByMACAddress map[string]net.IP
+
+	// If specified, overrides the default PXE boot image.
+	PXEBootImage string
+
+	// If specified, overrides the default PXE profile image.
+	IPXEProfile string
+
+	// If specified, overrides the default iPXE boot script URL (and IPXEProfile).
+	IPXEBootScript string
+}
 
 // RefreshServerMetadata refreshes the map of MAC addresses to server metadata.
 func (service *Service) RefreshServerMetadata() error {
 	return service.refreshServerMetadataInternal(true)
 }
 func (service *Service) refreshServerMetadataInternal(acquireStateLock bool) error {
-	serversByMACAddress, err := service.readServerMetadata()
+	serverMetadataByMACAddress, err := service.readServerMetadata()
 	if err != nil {
 		return err
 	}
@@ -22,14 +39,14 @@ func (service *Service) refreshServerMetadataInternal(acquireStateLock bool) err
 		service.acquireStateLock("refreshServerMetadataInternal")
 		defer service.releaseStateLock("refreshServerMetadataInternal")
 	}
-	service.ServersByMACAddress = serversByMACAddress
+	service.ServerMetadataByMACAddress = serverMetadataByMACAddress
 
 	return nil
 }
 
 // readServerMetadata creates a map of MAC addresses to server metadata from CloudControl.
-func (service *Service) readServerMetadata() (map[string]compute.Server, error) {
-	serversByMACAddress := make(map[string]compute.Server)
+func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) {
+	serverMetadataByMACAddress := make(map[string]ServerMetadata)
 
 	page := compute.DefaultPaging()
 	page.PageSize = 50
@@ -53,13 +70,54 @@ func (service *Service) readServerMetadata() (map[string]compute.Server, error) 
 			primaryMACAddress := strings.ToLower(
 				*primaryNetworkAdapter.MACAddress,
 			)
-			serversByMACAddress[primaryMACAddress] = server
+			serverMetadata := &ServerMetadata{
+				ID:   server.ID,
+				Name: server.Name,
+				IPv4ByMACAddress: map[string]net.IP{
+					primaryMACAddress: net.ParseIP(*primaryNetworkAdapter.PrivateIPv4Address),
+				},
+			}
 
 			if service.EnableDebugLogging {
 				log.Printf("\tMAC %s -> %s (%s)\n",
 					primaryMACAddress,
 					*primaryNetworkAdapter.PrivateIPv4Address,
 					server.Name,
+				)
+			}
+
+			// Enable overriding of PXE / iPXE metadata from tags.
+			tagPage := compute.DefaultPaging()
+			tagPage.PageSize = 50
+
+			for {
+				tags, err := service.Client.GetAssetTags(server.ID, compute.AssetTypeServer, tagPage)
+				if err != nil {
+					return nil, err
+				}
+				if tags.IsEmpty() {
+					break
+				}
+
+				for _, tag := range tags.Items {
+					switch tag.Name {
+					case "pxe_boot_image":
+						serverMetadata.PXEBootImage = tag.Value
+					case "ipxe_profile":
+						serverMetadata.IPXEProfile = tag.Value
+					case "ipxe_boot_script":
+						serverMetadata.IPXEBootScript = tag.Value
+					}
+				}
+
+				tagPage.Next()
+			}
+
+			// If we have an IPXE profile, but no URL for the IPXE boot script, generate the URL.
+			if serverMetadata.IPXEProfile != "" && serverMetadata.IPXEBootScript == "" {
+				serverMetadata.IPXEBootScript = fmt.Sprintf("http://%s/?profile=%s",
+					service.ServiceIP,
+					serverMetadata.IPXEProfile,
 				)
 			}
 
@@ -72,7 +130,7 @@ func (service *Service) readServerMetadata() (map[string]compute.Server, error) 
 				additionalMACAddress := strings.ToLower(
 					*additionalNetworkAdapter.MACAddress,
 				)
-				serversByMACAddress[additionalMACAddress] = server
+				serverMetadata.IPv4ByMACAddress[additionalMACAddress] = net.ParseIP(*additionalNetworkAdapter.PrivateIPv4Address)
 
 				if service.EnableDebugLogging {
 					log.Printf("\tMAC address %s -> %s (%s)\n",
@@ -82,65 +140,45 @@ func (service *Service) readServerMetadata() (map[string]compute.Server, error) 
 					)
 				}
 			}
+
+			// Enable lookup by any MAC address.
+			for macAddress := range serverMetadata.IPv4ByMACAddress {
+				serverMetadataByMACAddress[macAddress] = *serverMetadata
+			}
 		}
 
 		page.Next()
 	}
 
-	return serversByMACAddress, nil
+	return serverMetadataByMACAddress, nil
 }
 
-// FindServerByMACAddress finds the server (if any) posessing a network adapter with the specified MAC address.
-func (service *Service) FindServerByMACAddress(macAddress string) *compute.Server {
-	service.acquireStateLock("FindServerByMACAddress")
-	defer service.releaseStateLock("FindServerByMACAddress")
+// FindServerMetadataByMACAddress finds the metadata for the server (if any) posessing a network adapter with the specified MAC address.
+func (service *Service) FindServerMetadataByMACAddress(macAddress string) *ServerMetadata {
+	service.acquireStateLock("FindServerMetadataByMACAddress")
+	defer service.releaseStateLock("FindServerMetadataByMACAddress")
 
 	macAddress = strings.ToLower(macAddress)
 
-	// Fake up a matching server if there's a matching static address reservation.
+	// Fake up metadata for a matching server if there's a matching static address reservation.
 	staticReservation, ok := service.StaticReservationsByMACAddress[macAddress]
 	if ok {
 		serverMACAddress := macAddress
-		serverPrivateIPv4Address := staticReservation.IPAddress.String()
+		serverPrivateIPv4Address := staticReservation.IPAddress
 
-		return &compute.Server{
+		return &ServerMetadata{
+			ID:   staticReservation.HostName,
 			Name: staticReservation.HostName,
-			Network: compute.VirtualMachineNetwork{
-				PrimaryAdapter: compute.VirtualMachineNetworkAdapter{
-					MACAddress:         &serverMACAddress,
-					PrivateIPv4Address: &serverPrivateIPv4Address,
-				},
+			IPv4ByMACAddress: map[string]net.IP{
+				serverMACAddress: serverPrivateIPv4Address,
 			},
 		}
 	}
 
-	server, ok := service.ServersByMACAddress[macAddress]
+	serverMetadata, ok := service.ServerMetadataByMACAddress[macAddress]
 	if ok {
-		return &server
+		return &serverMetadata
 	}
 
 	return nil
-}
-
-// Create a test server for calls from localhost.
-func createTestServer() *compute.Server {
-	localhost4 := os.Getenv("MCP_TEST_HOST_IPV4")
-	if localhost4 == "" {
-		localhost4 = "127.0.0.1"
-	}
-
-	localhost6 := os.Getenv("MCP_TEST_HOST_IPV6")
-	if localhost6 == "" {
-		localhost6 = "::1"
-	}
-
-	return &compute.Server{
-		Name: os.Getenv("HOST"),
-		Network: compute.VirtualMachineNetwork{
-			PrimaryAdapter: compute.VirtualMachineNetworkAdapter{
-				PrivateIPv4Address: &localhost4,
-				PrivateIPv6Address: &localhost6,
-			},
-		},
-	}
 }
