@@ -18,9 +18,6 @@ type ServerMetadata struct {
 	// If specified, overrides the default PXE boot image.
 	PXEBootImage string
 
-	// If specified, overrides the default PXE profile image.
-	IPXEProfile string
-
 	// If specified, overrides the default iPXE boot script URL (and IPXEProfile).
 	IPXEBootScript string
 }
@@ -104,21 +101,20 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) 
 					case "pxe_boot_image":
 						serverMetadata.PXEBootImage = tag.Value
 					case "ipxe_profile":
-						serverMetadata.IPXEProfile = tag.Value
+						if serverMetadata.IPXEBootScript != "" {
+							continue // ipxe_boot_script overrides ipxe_profile
+						}
+
+						serverMetadata.IPXEBootScript = fmt.Sprintf("http://%s/?profile=%s",
+							service.ServiceIP,
+							tag.Value,
+						)
 					case "ipxe_boot_script":
 						serverMetadata.IPXEBootScript = tag.Value
 					}
 				}
 
 				tagPage.Next()
-			}
-
-			// If we have an IPXE profile, but no URL for the IPXE boot script, generate the URL.
-			if serverMetadata.IPXEProfile != "" && serverMetadata.IPXEBootScript == "" {
-				serverMetadata.IPXEBootScript = fmt.Sprintf("http://%s/?profile=%s",
-					service.ServiceIP,
-					serverMetadata.IPXEProfile,
-				)
 			}
 
 			for _, additionalNetworkAdapter := range server.Network.AdditionalNetworkAdapters {
