@@ -43,6 +43,11 @@ func (service *Service) refreshServerMetadataInternal(acquireStateLock bool) err
 
 // readServerMetadata creates a map of MAC addresses to server metadata from CloudControl.
 func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) {
+	allServerTags, err := service.getAllServerTags()
+	if err != nil {
+		return nil, err
+	}
+
 	serverMetadataByMACAddress := make(map[string]ServerMetadata)
 
 	page := compute.DefaultPaging()
@@ -74,6 +79,7 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) 
 					primaryMACAddress: net.ParseIP(*primaryNetworkAdapter.PrivateIPv4Address),
 				},
 			}
+			service.parseServerTags(serverMetadata, allServerTags)
 
 			if service.EnableDebugLogging {
 				log.Printf("\tMAC %s -> %s (%s)\n",
@@ -103,11 +109,6 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) 
 				}
 			}
 
-			err = service.readServerTags(serverMetadata)
-			if err != nil {
-				return nil, err
-			}
-
 			// Enable lookup by any MAC address.
 			for macAddress := range serverMetadata.IPv4ByMACAddress {
 				serverMetadataByMACAddress[macAddress] = *serverMetadata
@@ -120,47 +121,66 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) 
 	return serverMetadataByMACAddress, nil
 }
 
-// Read and parse tags for the specified server.
-func (service *Service) readServerTags(serverMetadata *ServerMetadata) error {
-	// Enable overriding of PXE / iPXE metadata from tags.
+// Get tags for all servers, keyed by server Id.
+func (service *Service) getAllServerTags() (map[string][]compute.TagDetail, error) {
+	allServerTags := make(map[string][]compute.TagDetail)
+
 	tagPage := compute.DefaultPaging()
 	tagPage.PageSize = 50
 
 	for {
-		tags, err := service.Client.GetAssetTags(serverMetadata.ID, compute.AssetTypeServer, tagPage)
+		tags, err := service.Client.GetAssetTagsByType(compute.AssetTypeServer, tagPage)
 		if err != nil {
 			if compute.IsAPIErrorCode(err, compute.ResponseCodeUnexpectedError) {
 				break // CloudControl bug - going past last page of tags returns UNEXPECTED_ERROR (i.e. there are no more tags).
 			}
 
-			return err
+			return nil, err
 		}
 		if tags.IsEmpty() {
 			break // No more tags.
 		}
 
 		for _, tag := range tags.Items {
-			switch tag.Name {
-			case "pxe_boot_image":
-				serverMetadata.PXEBootImage = tag.Value
-			case "ipxe_profile":
-				if serverMetadata.IPXEBootScript != "" {
-					continue // ipxe_boot_script overrides ipxe_profile
-				}
-
-				serverMetadata.IPXEBootScript = fmt.Sprintf("http://%s/?profile=%s",
-					service.ServiceIP,
-					tag.Value,
-				)
-			case "ipxe_boot_script":
-				serverMetadata.IPXEBootScript = tag.Value
+			serverTags, ok := allServerTags[tag.AssetID]
+			if ok {
+				serverTags = append(serverTags, tag)
+			} else {
+				serverTags = []compute.TagDetail{tag}
 			}
+			allServerTags[tag.AssetID] = serverTags
 		}
 
 		tagPage.Next()
 	}
 
-	return nil
+	return allServerTags, nil
+}
+
+// Update server metadata from tags (if any) applied to the specified server.
+func (service *Service) parseServerTags(serverMetadata *ServerMetadata, allServerTags map[string][]compute.TagDetail) {
+	serverTags, ok := allServerTags[serverMetadata.ID]
+	if !ok {
+		return
+	}
+
+	for _, tag := range serverTags {
+		switch tag.Name {
+		case "pxe_boot_image":
+			serverMetadata.PXEBootImage = tag.Value
+		case "ipxe_profile":
+			if serverMetadata.IPXEBootScript != "" {
+				continue // ipxe_boot_script overrides ipxe_profile
+			}
+
+			serverMetadata.IPXEBootScript = fmt.Sprintf("http://%s/?profile=%s",
+				service.ServiceIP,
+				tag.Value,
+			)
+		case "ipxe_boot_script":
+			serverMetadata.IPXEBootScript = tag.Value
+		}
+	}
 }
 
 // FindServerMetadataByMACAddress finds the metadata for the server (if any) posessing a network adapter with the specified MAC address.
