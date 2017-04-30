@@ -15,10 +15,13 @@ coreos_default_ssh_key_file: "~/.ssh/id_rsa.pub" # Use the current user's SSH ke
 # DHCP configuration
 dhcp_interface:   "eth0"
 dhcp_service_ip:  "{{ private_ipv4 }}" # IP address of the DHCP / iPXE server
-dhcp_ip_start:    "192.168.70.20" # TODO: Remove this option.
-dhcp_ip_end:      "192.168.70.30" # TODO: Remove this option.
 
 # PXE / iPXE configuration
 coreos_ipxe_server_data_dir:  "/opt/coreos-ipxe-server"
 pxe_boot_image:               "undionly.kpxe"
-ipxe_boot_script:             "http://{{ private_ipv4 }}/?profile=development"
+ipxe_default_profile:         "development"
+ipxe_port:                    4777
+ipxe_listen_address:          "0.0.0.0:{{ ipxe_port }}" # By default, listen on all addresses
+ipxe_base_address:            "{{ private_ipv4 }}:{{ ipxe_port }}" # Direct clients to this address, specifically
+ipxe_base_url:                "http://{{ ipxe_base_address }}/"
+ipxe_boot_script:             "{{ ipxe_base_url }}?profile={{ ipxe_default_profile }}"

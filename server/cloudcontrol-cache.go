@@ -181,8 +181,9 @@ func (service *Service) parseServerTags(serverMetadata *ServerMetadata, allServe
 			}
 
 			// TODO: Add config item for URL template.
-			serverMetadata.IPXEBootScript = fmt.Sprintf("http://%s:4777/?profile=%s",
+			serverMetadata.IPXEBootScript = fmt.Sprintf("http://%s:%d/?profile=%s",
 				service.ServiceIP,
+				service.IPXEPort,
 				tag.Value,
 			)
 		case "ipxe_boot_script":

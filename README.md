@@ -26,6 +26,7 @@ If you're using iPXE, add the following to `mcp2-dhcp-server.yml`:
 ```yaml
 ipxe:
   enable: true
+  port: 4777 # The TCP port used by the IPXE server (e.g. coreos-ixpe-server). Usually matches boot_script below.
   boot_image: "undionly.kpxe"
   boot_script: "http://192.168.220.10:4777/?profile=development"
 ```
@@ -42,7 +43,7 @@ If you're trying to boot CoreOS, consider using [coreos-ipxe-server](https://git
 You can customise PXE / iPXE behaviour in CloudControl by giving a server one or more of the following tags:
 
 * `pxe_boot_image` (optional) - if specified, overrides the name of the initial PXE boot image to use (relative to `/var/lib/tftpboot` on the TFTP server).
-* `ipxe_profile` (optional) - if specified, overrides the name of the iPXE profile to use (equivalent to specifying `ipxe_boot_script` = `http://service_ip:4777/?profile=ipxe_profile`).
+* `ipxe_profile` (optional) - if specified, overrides the name of the iPXE profile to use (equivalent to specifying `ipxe_boot_script` = `http://{network.service_ip}:{ipxe.port}:4777/?profile={ipxe_profile}`).
 * `ipxe_boot_script` (optional) - if specified, overrides the URL of the iPXE boot script to use (also overrides `ipxe_profile`).
 
 ## Network boot in MCP2
@@ -53,27 +54,33 @@ You can customise PXE / iPXE behaviour in CloudControl by giving a server one or
 
 Deploy an Ubuntu 16.x server attached to the target VLAN (other distros might work but have not been tested):
 
-1. `apt-get install -y git build-essential liblzma-dev mkisofs tftpd-hpa`.
-2. `mkdir -p /usr/local/src/ipxe`
-3. `cd /usr/local/src/ipxe`
-4. `git clone git://git.ipxe.org/ipxe.git .`
-5. `cd src`
-6. `make`
-7. `cp bin/undionly.kpxe /var/lib/tftpboot`
-8. Place a copy of the `mcp2-dhcp-server` [executable](https://github.com/DimensionDataResearch/mcp2-dhcp-server/releases/download/v0.1-alpha1/mcp2-dhcp-server) on this machine.
+1. Build and install iPXE:  
+```bash
+apt-get install -y git build-essential liblzma-dev mkisofs tftpd-hpa
+mkdir -p /usr/local/src/ipxe
+cd /usr/local/src/ipxe
+git clone git://git.ipxe.org/ipxe.git .
+cd src
+make bin/undionly.kpxe
+cp bin/undionly.kpxe /var/lib/tftpboot
+```
+2. Place a copy of the `mcp2-dhcp-server` [executable](https://github.com/DimensionDataResearch/mcp2-dhcp-server/releases/download/v0.1-alpha4/mcp2-dhcp-server) on this machine.
 
 If you're using `coreos-ipxe-server`:
 
 1. Place a copy of the `coreos-ipxe-server` [executable](https://github.com/kelseyhightower/coreos-ipxe-server/releases/download/v0.3.0/coreos-ipxe-server-0.3.0-linux-amd64) on this machine.
-2. `export COREOS_IPXE_SERVER_DATA_DIR=/opt/coreos-ipxe-server`
-3. `mkdir -p $COREOS_IPXE_SERVER_DATA_DIR/{configs,images,profiles,sshkeys}`
-4. `mkdir -p $COREOS_IPXE_SERVER_DATA_DIR/images/amd64-usr/310.1.0`
-5. `pushd $COREOS_IPXE_SERVER_DATA_DIR/images/amd64-usr/310.1.0`
-6. `wget http://storage.core-os.net/coreos/amd64-usr/310.1.0/coreos_production_pxe_image.cpio.gz`
-7. `wget http://storage.core-os.net/coreos/amd64-usr/310.1.0/coreos_production_pxe.vmlinuz`
-8. `popd`
-9. Place an SSH public key in `$COREOS_IPXE_SERVER_DATA_DIR/sshkeys/coreos.pub`
-10. Place a cloud-config in `$COREOS_IPXE_SERVER_DATA_DIR/configs/development.yml`:  
+2. Create the initial directory structure and download a CoreOS image:  
+```bash
+export COREOS_IPXE_SERVER_DATA_DIR=/opt/coreos-ipxe-server
+mkdir -p $COREOS_IPXE_SERVER_DATA_DIR/{configs,images,profiles,sshkeys}
+mkdir -p $COREOS_IPXE_SERVER_DATA_DIR/images/amd64-usr/310.1.0
+pushd $COREOS_IPXE_SERVER_DATA_DIR/images/amd64-usr/310.1.0
+wget http://storage.core-os.net/coreos/amd64-usr/310.1.0/coreos_production_pxe_image.cpio.gz
+wget http://storage.core-os.net/coreos/amd64-usr/310.1.0/coreos_production_pxe.vmlinuz
+popd
+```
+2. Place an SSH public key in `$COREOS_IPXE_SERVER_DATA_DIR/sshkeys/coreos.pub`.
+3. Place a cloud-config in `$COREOS_IPXE_SERVER_DATA_DIR/configs/development.yml`:  
 ```yaml
 #cloud-config
 
@@ -96,7 +103,7 @@ coreos:
     version-id: 310.1.0
     home-url: https://coreos.com
 ```
-11. Place a profile in `$COREOS_IPXE_SERVER_DATA_DIR/profiles/development.json`:  
+4. Place a profile in `$COREOS_IPXE_SERVER_DATA_DIR/profiles/development.json`:  
 ```json
 {
 	"cloud_config": "development",

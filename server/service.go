@@ -31,6 +31,7 @@ type Service struct {
 	DHCPOptions dhcp.Options
 
 	EnableIPXE     bool
+	IPXEPort       int
 	TFTPServerName string
 	PXEBootImage   string // PXE boot file (TFTP)
 	IPXEBootScript string // iPXE boot script (HTTP)
@@ -67,6 +68,7 @@ func (service *Service) Initialize() error {
 	// Defaults
 	viper.SetDefault("debug", false)
 	viper.SetDefault("ipxe.enable", false)
+	viper.SetDefault("ipxe.port", 4777)
 	viper.SetDefault("ipxe.boot_image", "undionly.kpxe")
 
 	// Environment variables.
@@ -78,6 +80,7 @@ func (service *Service) Initialize() error {
 	viper.BindEnv("MCP_DHCP_VLAN_ID", "network.vlan_id")
 	viper.BindEnv("MCP_DHCP_SERVICE_IP", "network.service_ip")
 	viper.BindEnv("MCP_IPXE_ENABLE", "ipxe.enable")
+	viper.BindEnv("MCP_IPXE_PORT", "ipxe.port")
 	viper.BindEnv("MCP_IPXE_BOOT_IMAGE", "ipxe.boot_image")
 	viper.BindEnv("MCP_IPXE_BOOT_SCRIPT", "ipxe.boot_script")
 
@@ -134,6 +137,7 @@ func (service *Service) Initialize() error {
 
 	service.EnableIPXE = viper.GetBool("ipxe.enable")
 	if service.EnableIPXE {
+		service.IPXEPort = viper.GetInt("ipxe.port")
 		service.TFTPServerName = service.ServiceIP.String()
 
 		service.PXEBootImage = viper.GetString("ipxe.boot_image")
