@@ -106,12 +106,20 @@ coreos:
 }
 ```
 
-### Process
+### Net-bootable image
+
+1. Download the image files [here](https://ddcbu.blob.core.windows.net/public/mcp/net-boot.zip) and unzip it.
+2. Upload the `.ovf`, `.vmdk`, and `.mf` files to CloudControl and import them as a client image (ensure that "Import without Guest OS Customization" is checked, see [here](https://docs.mcp-services.net/display/CCD/How+to+Import+an+OVF+Package+as+a+Client+Image) for details).
+
+### Net-bootable image (create your own)
 
 1. Create a VM using VMWare Workstation or VMWare fusion (ensure it has 1 disk and 1 network adapter, with hardware version <= 10).
 2. Do not install an operating system (leave the disk completely empty).
 3. Close VMWare, and use [ovftool](https://my.vmware.com/web/vmware/details?downloadGroup=OVFTOOL400&productId=353) to convert the virtual machine to OVF format (`ovftool myserver.vmx ovf/myserver.ovf`).
-4. Upload the `.ovf`, `.vmdk`, and `.mf` files to CloudControl and import it as a client image (ensure that "Import without Guest OS Customization" is checked, see [here](https://docs.mcp-services.net/display/CCD/How+to+Import+an+OVF+Package+as+a+Client+Image) for details).
-5. On your DHCP / iPXE server, run `coreos-ipxe-server`.
-6. On your DHCP / iPXE server, run `mcp2-dhcp-server`.
-7. Deploy a new server from your client image, and start it. Network boot should proceed automatically.
+4. Upload the `.ovf`, `.vmdk`, and `.mf` files to CloudControl and import them as a client image (ensure that "Import without Guest OS Customization" is checked, see [here](https://docs.mcp-services.net/display/CCD/How+to+Import+an+OVF+Package+as+a+Client+Image) for details).
+
+### Putting it all together
+
+1. On your DHCP / iPXE server, run `coreos-ipxe-server`.
+2. On your DHCP / iPXE server, run `mcp2-dhcp-server`.
+3. Deploy a new server from your client image, and start it. Network boot should proceed automatically.
