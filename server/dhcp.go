@@ -230,11 +230,6 @@ func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, request
 	// Set the DHCP server identity (i.e. DHCP server address).
 	reply.SetSIAddr(service.ServiceIP)
 
-	offerOpts := reply.ParseOptions()
-	for optCode := range offerOpts {
-		log.Printf("OFFER_OPT: '%s'", optCode.String())
-	}
-
 	return reply
 }
 

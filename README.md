@@ -42,7 +42,7 @@ If you're trying to boot CoreOS, consider using [coreos-ipxe-server](https://git
 You can customise PXE / iPXE behaviour in CloudControl by giving a server one or more of the following tags:
 
 * `pxe_boot_image` (optional) - if specified, overrides the name of the initial PXE boot image to use (relative to `/var/lib/tftpboot` on the TFTP server).
-* `ipxe_profile` (optional) - if specified, overrides the name of the iPXE profile to use (equivalent to specifying `ipxe_boot_script` = `http://service_ip/?profile=ipxe_profile`).
+* `ipxe_profile` (optional) - if specified, overrides the name of the iPXE profile to use (equivalent to specifying `ipxe_boot_script` = `http://service_ip:4777/?profile=ipxe_profile`).
 * `ipxe_boot_script` (optional) - if specified, overrides the URL of the iPXE boot script to use (also overrides `ipxe_profile`).
 
 ## Network boot in MCP2
