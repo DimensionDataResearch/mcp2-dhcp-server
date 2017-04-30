@@ -64,7 +64,7 @@ cd src
 make bin/undionly.kpxe
 cp bin/undionly.kpxe /var/lib/tftpboot
 ```
-2. Place a copy of the `mcp2-dhcp-server` [executable](https://github.com/DimensionDataResearch/mcp2-dhcp-server/releases/download/v0.1-alpha4/mcp2-dhcp-server) on this machine.
+2. Place a copy of the `mcp2-dhcp-server` [executable](https://github.com/DimensionDataResearch/mcp2-dhcp-server/releases/download/v0.1-alpha4/mcp2-dhcp-server.v0.1.0-alpha4.linux-amd64.zip) on this machine.
 
 If you're using `coreos-ipxe-server`:
 
