@@ -7,8 +7,6 @@ network:
   interface: eth0
   vlan_id: "42837f37-a0fd-4544-a800-416a1d33f672"
   service_ip: 192.168.70.12
-  start_ip: 192.168.70.20
-  end_ip: 192.168.70.30
 
   # Only for testing purposes - remove this if you're running for real.
   static_reservations:

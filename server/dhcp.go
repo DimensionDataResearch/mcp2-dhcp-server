@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DimensionDataResearch/go-dd-cloud-compute/compute"
 	dhcp "github.com/krolaw/dhcp4"
 )
 
@@ -44,21 +43,27 @@ func (lease *Lease) IsExpired() bool {
 func (service *Service) ServeDHCP(request dhcp.Packet, msgType dhcp.MessageType, requestOptions dhcp.Options) (response dhcp.Packet) {
 	switch msgType {
 	case dhcp.Discover:
-		return service.handleDiscover(request, requestOptions)
+		response = service.handleDiscover(request, requestOptions)
 
 	case dhcp.Request:
-		return service.handleRequest(request, requestOptions)
+		response = service.handleRequest(request, requestOptions)
 
 	case dhcp.Release:
-		return service.handleRelease(request, requestOptions)
+		response = service.handleRelease(request, requestOptions)
+	default:
+		log.Printf("[TXN: %s] Ignoring unhandled DHCP message type (%s).",
+			getTransactionID(request),
+			msgType.String(),
+		)
+
+		response = service.replyNAK(request)
 	}
 
-	log.Printf("[TXN: %s] Ignoring unhandled DHCP message type (%s).",
-		getTransactionID(request),
-		msgType.String(),
-	)
+	if response != nil {
+		response.PadToMinSize() // Must add padding AFTER all other options.
+	}
 
-	return service.replyNAK(request)
+	return
 }
 
 // Handle a DHCP Discover packet.
@@ -67,7 +72,7 @@ func (service *Service) handleDiscover(request dhcp.Packet, requestOptions dhcp.
 	clientMACAddress := request.CHAddr().String()
 
 	// Do we know about a server in CloudControl with this MAC address?
-	server := service.FindServerByMACAddress(clientMACAddress)
+	serverMetadata := service.FindServerMetadataByMACAddress(clientMACAddress)
 
 	log.Printf("[TXN: %s] Discover message from client with MAC address %s (IP '%s').",
 		transactionID,
@@ -75,7 +80,7 @@ func (service *Service) handleDiscover(request dhcp.Packet, requestOptions dhcp.
 		request.CIAddr().String(),
 	)
 
-	if server == nil {
+	if serverMetadata == nil {
 		log.Printf("[TXN: %s] MAC address %s does not correspond to a server in CloudControl (no reply will be sent).",
 			transactionID,
 			clientMACAddress,
@@ -84,7 +89,7 @@ func (service *Service) handleDiscover(request dhcp.Packet, requestOptions dhcp.
 		return service.noReply()
 	}
 
-	targetIP, ok := getIPAddressFromMACAddress(server, clientMACAddress)
+	targetIP, ok := serverMetadata.IPv4ByMACAddress[clientMACAddress]
 	if !ok {
 		log.Printf("[TXN: %s] MAC address %s does not correspond to a network adapter in CloudControl (no reply will be sent).",
 			transactionID,
@@ -94,7 +99,7 @@ func (service *Service) handleDiscover(request dhcp.Packet, requestOptions dhcp.
 		return service.noReply()
 	}
 
-	return service.replyOffer(request, targetIP, requestOptions)
+	return service.replyOffer(request, targetIP, requestOptions, *serverMetadata)
 }
 
 // Handle a DHCP Request packet.
@@ -103,7 +108,7 @@ func (service *Service) handleRequest(request dhcp.Packet, requestOptions dhcp.O
 	clientMACAddress := request.CHAddr().String()
 
 	// Do we know about a server in CloudControl with this MAC address?
-	server := service.FindServerByMACAddress(clientMACAddress)
+	serverMetadata := service.FindServerMetadataByMACAddress(clientMACAddress)
 
 	log.Printf("[TXN: %s] Request message from client with MAC address %s (IP '%s').",
 		transactionID,
@@ -111,7 +116,7 @@ func (service *Service) handleRequest(request dhcp.Packet, requestOptions dhcp.O
 		request.CIAddr().String(),
 	)
 
-	if server == nil {
+	if serverMetadata == nil {
 		log.Printf("[TXN: %s] MAC address %s does not correspond to a server in CloudControl (no reply will be sent).",
 			transactionID,
 			clientMACAddress,
@@ -126,21 +131,21 @@ func (service *Service) handleRequest(request dhcp.Packet, requestOptions dhcp.O
 		log.Printf("[TXN: %s] Renew lease on IPv4 address %s for server %s and send ACK reply.",
 			transactionID,
 			existingLease.IPAddress.String(),
-			server.Name,
+			serverMetadata.Name,
 		)
 
 		service.renewLease(existingLease)
 
-		return service.replyACK(request, existingLease.IPAddress, requestOptions)
+		return service.replyACK(request, existingLease.IPAddress, requestOptions, *serverMetadata)
 	}
 
 	// New lease
-	targetIP, ok := getIPAddressFromMACAddress(server, clientMACAddress)
+	targetIP, ok := serverMetadata.IPv4ByMACAddress[clientMACAddress]
 	if !ok {
 		log.Printf("[TXN: %s] Cannot resolve network adapter in server %s (%s) with MAC address %s; send NAK reply.",
 			transactionID,
-			server.Name,
-			server.ID,
+			serverMetadata.Name,
+			serverMetadata.ID,
 			clientMACAddress,
 		)
 
@@ -149,13 +154,13 @@ func (service *Service) handleRequest(request dhcp.Packet, requestOptions dhcp.O
 
 	log.Printf("[TXN: %s] Create lease on IPv4 address %s for server %s (MAC address %s) and send ACK reply.",
 		transactionID,
-		server.Name,
+		serverMetadata.Name,
 		targetIP.String(),
 		clientMACAddress,
 	)
 	newLease := service.createLease(clientMACAddress, targetIP)
 
-	return service.replyACK(request, newLease.IPAddress, requestOptions)
+	return service.replyACK(request, newLease.IPAddress, requestOptions, *serverMetadata)
 }
 
 // Handle a DHCP Release packet.
@@ -164,7 +169,7 @@ func (service *Service) handleRelease(request dhcp.Packet, requestOptions dhcp.O
 	clientMACAddress := request.CHAddr().String()
 
 	// Do we know about a server in CloudControl with this MAC address?
-	server := service.FindServerByMACAddress(clientMACAddress)
+	serverMetadata := service.FindServerMetadataByMACAddress(clientMACAddress)
 
 	log.Printf("[TXN: %s] Release message from client with MAC address %s (IP '%s').",
 		transactionID,
@@ -172,7 +177,7 @@ func (service *Service) handleRelease(request dhcp.Packet, requestOptions dhcp.O
 		request.CIAddr().String(),
 	)
 
-	if server == nil {
+	if serverMetadata == nil {
 		log.Printf("MAC address %s does not correspond to a server in CloudControl (no reply will be sent).", clientMACAddress)
 
 		return service.replyNAK(request)
@@ -182,8 +187,8 @@ func (service *Service) handleRelease(request dhcp.Packet, requestOptions dhcp.O
 	if ok && !existingLease.IsExpired() {
 		log.Printf("[TXN: %s] Server '%s' (%s) requested termination of lease on IPv4 address %s.",
 			transactionID,
-			server.Name,
-			server.ID,
+			serverMetadata.Name,
+			serverMetadata.ID,
 			existingLease.IPAddress.String(),
 		)
 
@@ -191,8 +196,8 @@ func (service *Service) handleRelease(request dhcp.Packet, requestOptions dhcp.O
 	} else {
 		log.Printf("[TXN: %s] Server '%s' (%s) requested requested termination of expired or non-existent lease; request ignored.",
 			transactionID,
-			server.Name,
-			server.ID,
+			serverMetadata.Name,
+			serverMetadata.ID,
 		)
 	}
 
@@ -204,17 +209,51 @@ func (service *Service) noReply() dhcp.Packet {
 	return dhcp.Packet{}
 }
 
-// Create an Offer reply packet.
-func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, requestOptions dhcp.Options) (response dhcp.Packet) {
-	reply := dhcp.ReplyPacket(request, dhcp.Offer, service.ServiceIP,
+// Create an Offer reply packet (in response to Discover packet).
+func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, requestOptions dhcp.Options, serverMetadata ServerMetadata) (response dhcp.Packet) {
+	reply := newReply(request, dhcp.Offer, service.ServiceIP,
 		targetIP,
 		service.LeaseDuration,
 		service.DHCPOptions.SelectOrderOrAll(requestOptions[dhcp.OptionParameterRequestList]),
 	)
 
+	// Configure host name from server name.
+	reply.AddOption(dhcp.OptionHostName,
+		[]byte(serverMetadata.Name),
+	)
+
 	// Add DHCP options for PXE / iPXE, if required.
 	if service.EnableIPXE && isPXEClient(requestOptions) {
-		service.addIPXEBootstrap(request, requestOptions, reply)
+		service.addIPXEOptions(request, requestOptions, serverMetadata, reply)
+	}
+
+	// Set the DHCP server identity (i.e. DHCP server address).
+	reply.SetSIAddr(service.ServiceIP)
+
+	offerOpts := reply.ParseOptions()
+	for optCode := range offerOpts {
+		log.Printf("OFFER_OPT: '%s'", optCode.String())
+	}
+
+	return reply
+}
+
+// Create an ACK reply packet (in response to Request packet).
+func (service *Service) replyACK(request dhcp.Packet, targetIP net.IP, requestOptions dhcp.Options, serverMetadata ServerMetadata) (response dhcp.Packet) {
+	reply := newReply(request, dhcp.ACK, service.ServiceIP,
+		targetIP,
+		service.LeaseDuration,
+		service.DHCPOptions.SelectOrderOrAll(requestOptions[dhcp.OptionParameterRequestList]),
+	)
+
+	// Configure host name from server name.
+	reply.AddOption(dhcp.OptionHostName,
+		[]byte(serverMetadata.Name),
+	)
+
+	// Add DHCP options for PXE / iPXE, if required.
+	if service.EnableIPXE && isPXEClient(requestOptions) {
+		service.addIPXEOptions(request, requestOptions, serverMetadata, reply)
 	}
 
 	// Set the DHCP server identity (i.e. DHCP server address).
@@ -223,28 +262,9 @@ func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, request
 	return reply
 }
 
-// Create an ACK reply packet.
-func (service *Service) replyACK(request dhcp.Packet, targetIP net.IP, requestOptions dhcp.Options) (response dhcp.Packet) {
-	reply := dhcp.ReplyPacket(request, dhcp.ACK, service.ServiceIP,
-		targetIP,
-		service.LeaseDuration,
-		service.DHCPOptions.SelectOrderOrAll(requestOptions[dhcp.OptionParameterRequestList]),
-	)
-
-	// Add DHCP options for PXE / iPXE, if required.
-	if service.EnableIPXE && isPXEClient(requestOptions) {
-		service.addIPXEBootstrap(request, requestOptions, reply)
-	}
-
-	// Set the DHCP server identity (i.e. DHCP server address).
-	reply.SetSIAddr(service.ServiceIP)
-
-	return reply
-}
-
-// Create a NAK reply packet.
+// Create a NAK reply packet (in response to Discover or Request packet)
 func (service *Service) replyNAK(request dhcp.Packet) (response dhcp.Packet) {
-	reply := dhcp.ReplyPacket(request, dhcp.NAK, service.ServiceIP,
+	reply := newReply(request, dhcp.NAK, service.ServiceIP,
 		nil,
 		0,
 		nil,
@@ -303,7 +323,7 @@ func (service *Service) pruneLeases() {
 }
 
 // Add options for PXE / iPXE to a DHCP response.
-func (service *Service) addIPXEBootstrap(request dhcp.Packet, requestOptions dhcp.Options, reply dhcp.Packet) {
+func (service *Service) addIPXEOptions(request dhcp.Packet, requestOptions dhcp.Options, serverMetadata ServerMetadata, reply dhcp.Packet) {
 	transactionID := getTransactionID(request)
 
 	if isIPXEClient(requestOptions) {
@@ -311,59 +331,57 @@ func (service *Service) addIPXEBootstrap(request dhcp.Packet, requestOptions dhc
 		log.Printf("[TXN: %s] Client with MAC address %s is an iPXE client; directing them to boot script '%s'.",
 			transactionID,
 			request.CHAddr().String(),
-			service.IPXEBootScript,
+			service.getIPXEBootScript(serverMetadata),
 		)
 
-		service.addIPXEBootScript(reply)
+		service.addIPXEBootScript(serverMetadata, reply)
 	} else {
 		// This is a PXE client; direct them to load the standard PXE boot image.
 		log.Printf("[TXN: %s] Client with MAC address %s is a regular PXE (or non-PXE) client; directing them to iPXE boot image 'tftp://%s/%s'.",
 			transactionID,
 			request.CHAddr().String(),
 			service.ServiceIP,
-			service.PXEBootImage,
+			service.getPXEBootImage(serverMetadata),
 		)
 
-		service.addPXEBootImage(reply)
+		service.addPXEBootImage(serverMetadata, reply)
 	}
+}
+
+// Get the configured PXE boot image for the specified server.
+func (service *Service) getPXEBootImage(serverMetadata ServerMetadata) string {
+	ipxeBootScript := serverMetadata.PXEBootImage
+	if ipxeBootScript == "" {
+		ipxeBootScript = service.PXEBootImage
+	}
+
+	return ipxeBootScript
+}
+
+// Get the configured PXE boot image for the specified server.
+func (service *Service) getIPXEBootScript(serverMetadata ServerMetadata) string {
+	pxeBootImage := serverMetadata.IPXEBootScript
+	if pxeBootImage == "" {
+		pxeBootImage = service.IPXEBootScript
+	}
+
+	return pxeBootImage
 }
 
 // Add a PXE boot image (and TFTP server) to a DHCP response.
-func (service *Service) addPXEBootImage(response dhcp.Packet) {
-	addBootFile(response, service.PXEBootImage)
-	addTFTPBootFile(response, service.TFTPServerName, service.PXEBootImage)
+func (service *Service) addPXEBootImage(serverMetadata ServerMetadata, response dhcp.Packet) {
+	pxeBootImage := service.getPXEBootImage(serverMetadata)
+
+	addBootFile(response, pxeBootImage)
+	addTFTPBootFile(response, service.TFTPServerName, pxeBootImage)
 }
 
-// Add an IPXE boot script path to a DHCP response.
-func (service *Service) addIPXEBootScript(response dhcp.Packet) {
-	response.SetFile(
-		[]byte(service.IPXEBootScript),
-	)
-	response.AddOption(dhcp.OptionBootFileName,
-		[]byte(service.IPXEBootScript),
-	)
-}
+// Add an IPXE boot script URL to a DHCP response.
+func (service *Service) addIPXEBootScript(serverMetadata ServerMetadata, response dhcp.Packet) {
+	ipxeBootScript := service.getIPXEBootScript(serverMetadata)
 
-func getIPAddressFromMACAddress(server *compute.Server, macAddress string) (targetIP net.IP, ok bool) {
-	var targetAddress *string
-	primaryNetworkAdapter := server.Network.PrimaryAdapter
-	if *primaryNetworkAdapter.MACAddress == macAddress {
-		targetAddress = primaryNetworkAdapter.PrivateIPv4Address
-	} else {
-		for _, additionalNetworkAdapter := range server.Network.AdditionalNetworkAdapters {
-			if *additionalNetworkAdapter.MACAddress == macAddress {
-				targetAddress = additionalNetworkAdapter.PrivateIPv4Address
-			}
-		}
-	}
-	if targetAddress == nil {
-		return
-	}
-
-	targetIP = net.ParseIP(*targetAddress)
-	ok = true
-
-	return
+	addBootFile(response, ipxeBootScript)
+	addBootFileOption(response, ipxeBootScript)
 }
 
 // Get the DHCP transaction Id as a string.
@@ -423,12 +441,40 @@ func addBootFile(response dhcp.Packet, bootFile string) {
 	)
 }
 
-// Add DHCP TFTPServerName and BootFileName options (i.e. option 66, option 67) to a DHCP response.
-func addTFTPBootFile(response dhcp.Packet, tftpServerName string, bootFile string) {
-	response.AddOption(dhcp.OptionTFTPServerName,
-		[]byte(tftpServerName),
-	)
+// Add a DHCP-style boot file path option to a DHCP response.
+func addBootFileOption(response dhcp.Packet, bootFile string) {
 	response.AddOption(dhcp.OptionBootFileName,
 		[]byte(bootFile),
 	)
+}
+
+// Add DHCP TFTPServerName and BootFileName options (i.e. option 66, option 67) to a DHCP response.
+func addTFTPBootFile(response dhcp.Packet, tftpServerName string, bootFile string) {
+	addBootFileOption(response, bootFile)
+
+	response.AddOption(dhcp.OptionTFTPServerName,
+		[]byte(tftpServerName),
+	)
+}
+
+// Create a reply packet.
+func newReply(request dhcp.Packet, messageType dhcp.MessageType, serverIP, clientIP net.IP, leaseDuration time.Duration, options []dhcp.Option) (reply dhcp.Packet) {
+	reply = dhcp.NewPacket(dhcp.BootReply)
+	reply.SetXId(request.XId())
+	reply.SetFlags(request.Flags())
+	reply.SetYIAddr(clientIP)
+	reply.SetGIAddr(request.GIAddr())
+	reply.SetCHAddr(request.CHAddr())
+	reply.AddOption(dhcp.OptionDHCPMessageType, []byte{byte(messageType)})
+	reply.AddOption(dhcp.OptionServerIdentifier, []byte(serverIP))
+	if leaseDuration > 0 {
+		reply.AddOption(dhcp.OptionIPAddressLeaseTime, dhcp.OptionsLeaseTime(leaseDuration))
+	}
+	for _, option := range options {
+		reply.AddOption(option.Code, option.Value)
+	}
+
+	// We don't add padding until ALL options have been added (DHCP packet implementation is a bit buggy).
+
+	return reply
 }

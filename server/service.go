@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/DimensionDataResearch/go-dd-cloud-compute/compute"
-	"github.com/mostlygeek/arp"
 	"github.com/spf13/viper"
 
 	"strings"
@@ -36,11 +35,8 @@ type Service struct {
 	PXEBootImage   string // PXE boot file (TFTP)
 	IPXEBootScript string // iPXE boot script (HTTP)
 
-	ServersByMACAddress            map[string]compute.Server
+	ServerMetadataByMACAddress     map[string]ServerMetadata
 	StaticReservationsByMACAddress map[string]StaticReservation
-
-	DHCPRangeStart net.IP
-	DHCPRangeEnd   net.IP
 
 	LeasesByMACAddress map[string]*Lease
 	LeaseDuration      time.Duration
@@ -55,7 +51,7 @@ type Service struct {
 // NewService creates new Service state.
 func NewService() *Service {
 	return &Service{
-		ServersByMACAddress:            make(map[string]compute.Server),
+		ServerMetadataByMACAddress:     make(map[string]ServerMetadata),
 		StaticReservationsByMACAddress: make(map[string]StaticReservation),
 		LeasesByMACAddress:             make(map[string]*Lease),
 		LeaseDuration:                  24 * time.Hour,
@@ -86,8 +82,9 @@ func (service *Service) Initialize() error {
 	viper.BindEnv("MCP_IPXE_BOOT_SCRIPT", "ipxe.boot_script")
 
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath("./mcp2-dhcp-server.yml")
-	viper.AddConfigPath("/etc/mcp2-dhcp-server.yml")
+	viper.SetConfigName("mcp2-dhcp-server")
+	viper.AddConfigPath(".")
+	viper.AddConfigPath("/etc")
 
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -150,14 +147,6 @@ func (service *Service) Initialize() error {
 		}
 	}
 
-	service.DHCPRangeStart = net.ParseIP(
-		viper.GetString("network.start_ip"),
-	)
-
-	service.DHCPRangeEnd = net.ParseIP(
-		viper.GetString("network.end_ip"),
-	)
-
 	// Static reservations (for testing only)
 	staticReservationsValue := viper.Get("network.static_reservations")
 	if staticReservationsValue != nil {
@@ -187,31 +176,8 @@ func (service *Service) Initialize() error {
 
 	// Ignore IP range if we have static reservations.
 	if len(service.StaticReservationsByMACAddress) == 0 {
-		if !vlanNetwork.Contains(service.DHCPRangeStart) {
-			return fmt.Errorf("DHCP range start address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
-				service.ServiceIP.String(),
-				vlanCIDR,
-				service.VLAN.Name,
-			)
-		}
-
 		if !vlanNetwork.Contains(service.ServiceIP) {
 			return fmt.Errorf("Service IP address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
-				service.ServiceIP.String(),
-				vlanCIDR,
-				service.VLAN.Name,
-			)
-		}
-
-		if !dhcp.IPLess(service.DHCPRangeStart, service.DHCPRangeEnd) {
-			return fmt.Errorf("DHCP range start address %s greater than or equal to DHCP range start address %s",
-				service.DHCPRangeStart,
-				service.DHCPRangeEnd,
-			)
-		}
-
-		if !vlanNetwork.Contains(service.DHCPRangeEnd) {
-			return fmt.Errorf("DHCP range end address %s does not lie within the IP network (%s) of the target VLAN ('%s')",
 				service.ServiceIP.String(),
 				vlanCIDR,
 				service.VLAN.Name,
@@ -227,10 +193,6 @@ func (service *Service) Start() {
 	service.acquireStateLock("Start")
 	defer service.releaseStateLock("Start")
 
-	// Warm up caches.
-	log.Printf("Initialising ARP cache...")
-	arp.CacheUpdate()
-
 	log.Printf("Initialising CloudControl metadata cache...")
 	err := service.refreshServerMetadataInternal(false /* we already have the state lock */)
 	if err != nil {
@@ -240,9 +202,6 @@ func (service *Service) Start() {
 	}
 
 	log.Printf("All caches initialised.")
-
-	// Periodically scan the ARP cache so we can resolve MAC addresses from client IPs.
-	arp.AutoRefresh(10 * time.Second)
 
 	service.cancelRefresh = make(chan bool, 1)
 	service.refreshTimer = time.NewTicker(30 * time.Second)
