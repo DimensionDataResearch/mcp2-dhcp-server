@@ -161,6 +161,13 @@ func (service *Service) getAllServerTags() (map[string][]compute.TagDetail, erro
 func (service *Service) parseServerTags(serverMetadata *ServerMetadata, allServerTags map[string][]compute.TagDetail) {
 	serverTags, ok := allServerTags[serverMetadata.ID]
 	if !ok {
+		if service.EnableDebugLogging {
+			log.Printf("\tNo tags for server '%s' (Id = '%s'); assuming default configuration.",
+				serverMetadata.Name,
+				serverMetadata.ID,
+			)
+		}
+
 		return
 	}
 
@@ -173,12 +180,28 @@ func (service *Service) parseServerTags(serverMetadata *ServerMetadata, allServe
 				continue // ipxe_boot_script overrides ipxe_profile
 			}
 
-			serverMetadata.IPXEBootScript = fmt.Sprintf("http://%s/?profile=%s",
+			// TODO: Add config item for URL template.
+			serverMetadata.IPXEBootScript = fmt.Sprintf("http://%s:4777/?profile=%s",
 				service.ServiceIP,
 				tag.Value,
 			)
 		case "ipxe_boot_script":
 			serverMetadata.IPXEBootScript = tag.Value
+		}
+	}
+
+	if service.EnableDebugLogging {
+		log.Printf("\t%d tags for server '%s' (Id = '%s'):",
+			len(serverTags),
+			serverMetadata.Name,
+			serverMetadata.ID,
+		)
+
+		if serverMetadata.PXEBootImage != "" {
+			log.Printf("\t\tOverride PXE boot image: '%s'", serverMetadata.PXEBootImage)
+		}
+		if serverMetadata.IPXEBootScript != "" {
+			log.Printf("\t\tOverride iPXE boot script: '%s'", serverMetadata.IPXEBootScript)
 		}
 	}
 }

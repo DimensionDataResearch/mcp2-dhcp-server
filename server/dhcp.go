@@ -43,21 +43,27 @@ func (lease *Lease) IsExpired() bool {
 func (service *Service) ServeDHCP(request dhcp.Packet, msgType dhcp.MessageType, requestOptions dhcp.Options) (response dhcp.Packet) {
 	switch msgType {
 	case dhcp.Discover:
-		return service.handleDiscover(request, requestOptions)
+		response = service.handleDiscover(request, requestOptions)
 
 	case dhcp.Request:
-		return service.handleRequest(request, requestOptions)
+		response = service.handleRequest(request, requestOptions)
 
 	case dhcp.Release:
-		return service.handleRelease(request, requestOptions)
+		response = service.handleRelease(request, requestOptions)
+	default:
+		log.Printf("[TXN: %s] Ignoring unhandled DHCP message type (%s).",
+			getTransactionID(request),
+			msgType.String(),
+		)
+
+		response = service.replyNAK(request)
 	}
 
-	log.Printf("[TXN: %s] Ignoring unhandled DHCP message type (%s).",
-		getTransactionID(request),
-		msgType.String(),
-	)
+	if response != nil {
+		response.PadToMinSize() // Must add padding AFTER all other options.
+	}
 
-	return service.replyNAK(request)
+	return
 }
 
 // Handle a DHCP Discover packet.
@@ -205,7 +211,7 @@ func (service *Service) noReply() dhcp.Packet {
 
 // Create an Offer reply packet (in response to Discover packet).
 func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, requestOptions dhcp.Options, serverMetadata ServerMetadata) (response dhcp.Packet) {
-	reply := dhcp.ReplyPacket(request, dhcp.Offer, service.ServiceIP,
+	reply := newReply(request, dhcp.Offer, service.ServiceIP,
 		targetIP,
 		service.LeaseDuration,
 		service.DHCPOptions.SelectOrderOrAll(requestOptions[dhcp.OptionParameterRequestList]),
@@ -218,18 +224,23 @@ func (service *Service) replyOffer(request dhcp.Packet, targetIP net.IP, request
 
 	// Add DHCP options for PXE / iPXE, if required.
 	if service.EnableIPXE && isPXEClient(requestOptions) {
-		service.addIPXEBootstrap(request, requestOptions, serverMetadata, reply)
+		service.addIPXEOptions(request, requestOptions, serverMetadata, reply)
 	}
 
 	// Set the DHCP server identity (i.e. DHCP server address).
 	reply.SetSIAddr(service.ServiceIP)
+
+	offerOpts := reply.ParseOptions()
+	for optCode := range offerOpts {
+		log.Printf("OFFER_OPT: '%s'", optCode.String())
+	}
 
 	return reply
 }
 
 // Create an ACK reply packet (in response to Request packet).
 func (service *Service) replyACK(request dhcp.Packet, targetIP net.IP, requestOptions dhcp.Options, serverMetadata ServerMetadata) (response dhcp.Packet) {
-	reply := dhcp.ReplyPacket(request, dhcp.ACK, service.ServiceIP,
+	reply := newReply(request, dhcp.ACK, service.ServiceIP,
 		targetIP,
 		service.LeaseDuration,
 		service.DHCPOptions.SelectOrderOrAll(requestOptions[dhcp.OptionParameterRequestList]),
@@ -242,7 +253,7 @@ func (service *Service) replyACK(request dhcp.Packet, targetIP net.IP, requestOp
 
 	// Add DHCP options for PXE / iPXE, if required.
 	if service.EnableIPXE && isPXEClient(requestOptions) {
-		service.addIPXEBootstrap(request, requestOptions, serverMetadata, reply)
+		service.addIPXEOptions(request, requestOptions, serverMetadata, reply)
 	}
 
 	// Set the DHCP server identity (i.e. DHCP server address).
@@ -253,7 +264,7 @@ func (service *Service) replyACK(request dhcp.Packet, targetIP net.IP, requestOp
 
 // Create a NAK reply packet (in response to Discover or Request packet)
 func (service *Service) replyNAK(request dhcp.Packet) (response dhcp.Packet) {
-	reply := dhcp.ReplyPacket(request, dhcp.NAK, service.ServiceIP,
+	reply := newReply(request, dhcp.NAK, service.ServiceIP,
 		nil,
 		0,
 		nil,
@@ -312,7 +323,7 @@ func (service *Service) pruneLeases() {
 }
 
 // Add options for PXE / iPXE to a DHCP response.
-func (service *Service) addIPXEBootstrap(request dhcp.Packet, requestOptions dhcp.Options, serverMetadata ServerMetadata, reply dhcp.Packet) {
+func (service *Service) addIPXEOptions(request dhcp.Packet, requestOptions dhcp.Options, serverMetadata ServerMetadata, reply dhcp.Packet) {
 	transactionID := getTransactionID(request)
 
 	if isIPXEClient(requestOptions) {
@@ -320,7 +331,7 @@ func (service *Service) addIPXEBootstrap(request dhcp.Packet, requestOptions dhc
 		log.Printf("[TXN: %s] Client with MAC address %s is an iPXE client; directing them to boot script '%s'.",
 			transactionID,
 			request.CHAddr().String(),
-			service.IPXEBootScript,
+			service.getIPXEBootScript(serverMetadata),
 		)
 
 		service.addIPXEBootScript(serverMetadata, reply)
@@ -330,37 +341,47 @@ func (service *Service) addIPXEBootstrap(request dhcp.Packet, requestOptions dhc
 			transactionID,
 			request.CHAddr().String(),
 			service.ServiceIP,
-			service.PXEBootImage,
+			service.getPXEBootImage(serverMetadata),
 		)
 
 		service.addPXEBootImage(serverMetadata, reply)
 	}
 }
 
+// Get the configured PXE boot image for the specified server.
+func (service *Service) getPXEBootImage(serverMetadata ServerMetadata) string {
+	ipxeBootScript := serverMetadata.PXEBootImage
+	if ipxeBootScript == "" {
+		ipxeBootScript = service.PXEBootImage
+	}
+
+	return ipxeBootScript
+}
+
+// Get the configured PXE boot image for the specified server.
+func (service *Service) getIPXEBootScript(serverMetadata ServerMetadata) string {
+	pxeBootImage := serverMetadata.IPXEBootScript
+	if pxeBootImage == "" {
+		pxeBootImage = service.IPXEBootScript
+	}
+
+	return pxeBootImage
+}
+
 // Add a PXE boot image (and TFTP server) to a DHCP response.
 func (service *Service) addPXEBootImage(serverMetadata ServerMetadata, response dhcp.Packet) {
-	pxeBootImage := serverMetadata.PXEBootImage
-	if pxeBootImage == "" {
-		pxeBootImage = service.PXEBootImage
-	}
+	pxeBootImage := service.getPXEBootImage(serverMetadata)
 
 	addBootFile(response, pxeBootImage)
 	addTFTPBootFile(response, service.TFTPServerName, pxeBootImage)
 }
 
-// Add an IPXE boot script path to a DHCP response.
+// Add an IPXE boot script URL to a DHCP response.
 func (service *Service) addIPXEBootScript(serverMetadata ServerMetadata, response dhcp.Packet) {
-	ipxeBootScript := serverMetadata.IPXEBootScript
-	if ipxeBootScript == "" {
-		ipxeBootScript = service.IPXEBootScript
-	}
+	ipxeBootScript := service.getIPXEBootScript(serverMetadata)
 
-	response.SetFile(
-		[]byte(service.IPXEBootScript),
-	)
-	response.AddOption(dhcp.OptionBootFileName,
-		[]byte(service.IPXEBootScript),
-	)
+	addBootFile(response, ipxeBootScript)
+	addBootFileOption(response, ipxeBootScript)
 }
 
 // Get the DHCP transaction Id as a string.
@@ -420,12 +441,40 @@ func addBootFile(response dhcp.Packet, bootFile string) {
 	)
 }
 
-// Add DHCP TFTPServerName and BootFileName options (i.e. option 66, option 67) to a DHCP response.
-func addTFTPBootFile(response dhcp.Packet, tftpServerName string, bootFile string) {
-	response.AddOption(dhcp.OptionTFTPServerName,
-		[]byte(tftpServerName),
-	)
+// Add a DHCP-style boot file path option to a DHCP response.
+func addBootFileOption(response dhcp.Packet, bootFile string) {
 	response.AddOption(dhcp.OptionBootFileName,
 		[]byte(bootFile),
 	)
+}
+
+// Add DHCP TFTPServerName and BootFileName options (i.e. option 66, option 67) to a DHCP response.
+func addTFTPBootFile(response dhcp.Packet, tftpServerName string, bootFile string) {
+	addBootFileOption(response, bootFile)
+
+	response.AddOption(dhcp.OptionTFTPServerName,
+		[]byte(tftpServerName),
+	)
+}
+
+// Create a reply packet.
+func newReply(request dhcp.Packet, messageType dhcp.MessageType, serverIP, clientIP net.IP, leaseDuration time.Duration, options []dhcp.Option) (reply dhcp.Packet) {
+	reply = dhcp.NewPacket(dhcp.BootReply)
+	reply.SetXId(request.XId())
+	reply.SetFlags(request.Flags())
+	reply.SetYIAddr(clientIP)
+	reply.SetGIAddr(request.GIAddr())
+	reply.SetCHAddr(request.CHAddr())
+	reply.AddOption(dhcp.OptionDHCPMessageType, []byte{byte(messageType)})
+	reply.AddOption(dhcp.OptionServerIdentifier, []byte(serverIP))
+	if leaseDuration > 0 {
+		reply.AddOption(dhcp.OptionIPAddressLeaseTime, dhcp.OptionsLeaseTime(leaseDuration))
+	}
+	for _, option := range options {
+		reply.AddOption(option.Code, option.Value)
+	}
+
+	// We don't add padding until ALL options have been added (DHCP packet implementation is a bit buggy).
+
+	return reply
 }
