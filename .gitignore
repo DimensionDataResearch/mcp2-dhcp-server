@@ -30,3 +30,9 @@ _testmain.go
 
 # Version info
 version-info.go
+
+# Terraform
+terraform.tfvars
+terraform.tfstate*
+.terraform.tfstate*
+

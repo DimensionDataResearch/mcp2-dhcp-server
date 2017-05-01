@@ -6,7 +6,7 @@
  */
 
 // The MCP region code (AU, NA, etc).
-variable "region"               { default = "AU"}
+variable "mcp_region"           { default = "AU"}
 
 // The Id of the target MCP2.0 datacenter (e.g. NA9, AU10).
 variable "datacenter"           { default = "AU9"}
@@ -30,7 +30,7 @@ variable "server_ipv4"          { default = "192.168.70.10" }
 variable "ssh_user" { default = "root" }
 
 // The name of a file containing the SSH public key to install on the target server (password authentication will be disabled).
-variable "ssh_public_key_file"  { default = "~/.ssh/id_rsa" }
+variable "ssh_public_key_file"  { default = "~/.ssh/id_rsa.pub" }
 
 /*
  * Feel free to customise the configuration below if you know what you're doing.
@@ -52,38 +52,52 @@ data "ddcloud_vlan" "target_vlan" {
 }
 
 // Deploy an Ubuntu 16.x server to handle network boot services.
-resource "ddcloud_server" "boot_server" {
-    name            = "${server_name}"
+resource "ddcloud_server" "target_server" {
+    name            = "${var.server_name}"
     description     = "DHCP / network boot services for ${var.vlan}."
     admin_password  = "${var.ssh_bootstrap_password}"
+    auto_start      = true
 
     image = "Ubuntu 16.04 64-bit 2 CPU"
 
-    memory_gb       = 1
-    cpu_count       = 1
-    cores_per_cpu   = 2
+    memory_gb       = 2
+    cpu_count       = 2
+
+    networkdomain   = "${data.ddcloud_networkdomain.target_networkdomain.id}"
 
     primary_network_adapter {
         ipv4    = "${var.server_ipv4}"
-        vlan    = "${data.dcloud_vlan.target_vlan.id}"
+        vlan    = "${data.ddcloud_vlan.target_vlan.id}"
     }
 }
 
 // Expose via public IP
 resource "ddcloud_nat" "target_server_nat" {
-    private_ipv4    = "${ddcloud_server.target_server.primary_network_adapter.ipv4}"
+    private_ipv4    = "${ddcloud_server.target_server.primary_network_adapter.0.ipv4}"
     networkdomain   = "${data.ddcloud_networkdomain.target_networkdomain.id}"
 }
 
 // Allow SSH
+resource "ddcloud_address_list" "clients" {
+    name            = "Clients"
+    ip_version      = "IPv4"
+    
+    addresses = [
+        "${var.client_ip}"
+    ]
+
+    networkdomain   = "${data.ddcloud_networkdomain.target_networkdomain.id}"
+}
 resource "ddcloud_firewall_rule" "target_server_ssh_inbound" {
-    name                = "${server_name}.SSH.Inbound"
+    name                = "${var.server_name}.SSH.Inbound"
     placement           = "first"
     action              = "accept"
     enabled             = true
 
     ip_version          = "ipv4"
     protocol            = "tcp"
+
+    source_address_list = "${ddcloud_address_list.clients.id}"
 
     destination_address = "${ddcloud_nat.target_server_nat.public_ipv4}"
     destination_port    = "22"
@@ -92,7 +106,7 @@ resource "ddcloud_firewall_rule" "target_server_ssh_inbound" {
 }
 
 // Install an SSH key on the target server.
-variable "ssh_bootstrap_password" { default = "sn4uSag3s?" sensitive=true }
+variable "ssh_bootstrap_password" { default = "sn4uSag3s?" }
 
 # Install an SSH key so that Ansible doesn't make us jump through hoops to authenticate.
 resource "null_resource" "target_server_ssh_bootstrap" {
@@ -103,7 +117,12 @@ resource "null_resource" "target_server_ssh_bootstrap" {
 			"chmod 0700 ~/.ssh",
 			"echo '${file(var.ssh_public_key_file)}' > ~/.ssh/authorized_keys",
 			"chmod 0600 ~/.ssh/authorized_keys",
-			"passwd -d root" # Disable password authentication.
+			
+            # Disable password authentication.
+            "passwd -d root",
+            
+            # Ensure that python is installed (required by Ansible).
+            "apt-get install -y python"
 		]
 
 		connection {
@@ -119,4 +138,14 @@ resource "null_resource" "target_server_ssh_bootstrap" {
     depends_on = [
         "ddcloud_firewall_rule.target_server_ssh_inbound"
     ]
+}
+
+output "server_name" {
+    value = "${ddcloud_server.target_server.name}"
+}
+output "server_public_ipv4" {
+    value = "${ddcloud_nat.target_server_nat.public_ipv4}"
+}
+output "server_private_ipv4" {
+    value = "${ddcloud_server.target_server.primary_network_adapter.0.ipv4}"
 }
