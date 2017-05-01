@@ -1,20 +1,22 @@
 ---
 
 # Server versions
-mcp2_dhcp_server_version:   "0.1-alpha2"
+mcp2_dhcp_server_version:   "0.1-alpha4"
 coreos_ipxe_server_version: "0.3.0"
 
 # CloudControl connection details.
-mcp_user:     "my_mcp_user"
-mcp_password: "my_mcp_password"
-mcp_region:   "my_mcp_region"
+# Place username and password in MCP_USERNAME / MCP_PASSWORD environment variables.
+mcp_user:     "{{ lookup('env','MCP_USER') }}"
+mcp_password: "{{ lookup('env','MCP_PASSWORD') }}"
+mcp_region:   "AU"
+mcp_vlan_id:  "dfd5bd62-fb47-46b5-bd6e-b0494a29d42b"
 
 # Server configuration
 coreos_default_ssh_key_file: "~/.ssh/id_rsa.pub" # Use the current user's SSH key
 
 # DHCP configuration
-dhcp_interface:   "eth0"
-dhcp_service_ip:  "{{ private_ipv4 }}" # IP address of the DHCP / iPXE server
+dhcp_interface:   "ens192"
+dhcp_service_ip:  "192.168.6.10" # IP address of the DHCP / iPXE server
 
 # PXE / iPXE configuration
 coreos_ipxe_server_data_dir:  "/opt/coreos-ipxe-server"

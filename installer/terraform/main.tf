@@ -3,6 +3,8 @@
  * **************************************************************************************************
  *
  * Edit the variables below before applying this configuration.
+ *
+ * Place username and password in MCP_USERNAME / MCP_PASSWORD environment variables.
  */
 
 // The MCP region code (AU, NA, etc).
@@ -14,8 +16,11 @@ variable "datacenter"           { default = "AU9"}
 // The name of the target network domain.
 variable "networkdomain"        { default = "My Network Domain" }
 
+// The name of the primry VLAN that the server will be attached to.
+variable "vlan_primary"         { default = "My VLAN" }
+
 // The name of the VLAN where DHCP and iPXE services will be provided.
-variable "vlan"                 { default = "My VLAN" }
+variable "vlan_service"         { default = "My VLAN" }
 
 // The public (external) IP of the client machine where Terraform / Ansible are running (used to create firewall rule for SSH).
 variable "client_ip"            { default = "1.2.3.4" }
@@ -23,8 +28,11 @@ variable "client_ip"            { default = "1.2.3.4" }
 // The name of the server to deploy.
 variable "server_name"          { default = "network-services" }
 
-// A private IPv4 address for the server to deploy.
-variable "server_ipv4"          { default = "192.168.70.10" }
+// The primary IPv4 address for the server to deploy.
+variable "server_primary_ipv4"  { default = "192.168.70.10" }
+
+// The IPv4 address for the server to deploy on which DHCP / PXE / iPXE services are provided.
+variable "server_service_ipv4"  { default = "192.168.70.10" }
 
 // The name of the user to install an SSH key for.
 variable "ssh_user" { default = "root" }
@@ -45,16 +53,20 @@ data "ddcloud_networkdomain" "target_networkdomain" {
     datacenter  = "${var.datacenter}"
 }
 
-// Retrieve information about the target VLAN.
-data "ddcloud_vlan" "target_vlan" {
-    name            = "${var.vlan}"
+// Retrieve information about the target VLANs.
+data "ddcloud_vlan" "primary_vlan" {
+    name            = "${var.vlan_primary}"
+    networkdomain   = "${data.ddcloud_networkdomain.target_networkdomain.id}"
+}
+data "ddcloud_vlan" "service_vlan" {
+    name            = "${var.vlan_service}"
     networkdomain   = "${data.ddcloud_networkdomain.target_networkdomain.id}"
 }
 
 // Deploy an Ubuntu 16.x server to handle network boot services.
 resource "ddcloud_server" "target_server" {
     name            = "${var.server_name}"
-    description     = "DHCP / network boot services for ${var.vlan}."
+    description     = "DHCP / network boot services for ${var.vlan_primary}."
     admin_password  = "${var.ssh_bootstrap_password}"
     auto_start      = true
 
@@ -66,8 +78,18 @@ resource "ddcloud_server" "target_server" {
     networkdomain   = "${data.ddcloud_networkdomain.target_networkdomain.id}"
 
     primary_network_adapter {
-        ipv4    = "${var.server_ipv4}"
-        vlan    = "${data.ddcloud_vlan.target_vlan.id}"
+        ipv4    = "${var.server_primary_ipv4}"
+        vlan    = "${data.ddcloud_vlan.primary_vlan.id}"
+    }
+
+    additional_network_adapter {
+        ipv4    = "${var.server_service_ipv4}"
+        vlan    = "${data.ddcloud_vlan.service_vlan.id}"
+    }
+
+    tag {
+        name    = "roles"
+        value   = "net-boot-service"
     }
 }
 
@@ -122,7 +144,10 @@ resource "null_resource" "target_server_ssh_bootstrap" {
             "passwd -d root",
             
             # Ensure that python is installed (required by Ansible).
-            "apt-get install -y python"
+            "apt-get install -y python",
+
+            # Configure default locale
+            "apt-get install -y language-pack-en"
 		]
 
 		connection {
@@ -146,6 +171,9 @@ output "server_name" {
 output "server_public_ipv4" {
     value = "${ddcloud_nat.target_server_nat.public_ipv4}"
 }
-output "server_private_ipv4" {
+output "server_private_ipv4_primary" {
     value = "${ddcloud_server.target_server.primary_network_adapter.0.ipv4}"
+}
+output "server_private_ipv4_service" {
+    value = "${ddcloud_server.target_server.additional_network_adapter.0.ipv4}"
 }

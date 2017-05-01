@@ -1,14 +1,13 @@
-----
-
-- hosts: all
-
+---
+- hosts: role=net-boot-service
   tasks:
     - name: Install prerequisites
       apt:
-        name: "{{ item.dest }}"
+        name: "{{ item }}"
         state: present
         update_cache: yes
       with_items:
+        - unzip
         - git
         - build-essential
         - liblzma-dev
@@ -35,7 +34,7 @@
         dest: /usr/local/bin/coreos-ipxe-server
         owner: root
         group: root
-        mode: u=rwx, g=rx, o=
+        mode: "u=rwx,g=rx,o="
 
     - name: Configure coreos-ipxe-server
       template:
@@ -44,14 +43,15 @@
 
     - name: Create coreos-ipxe-server directories
       file:
-        dest: "{{coreos_ipxe_server_data_dir}}/{{ item.dest }}"
+        dest: "{{coreos_ipxe_server_data_dir}}/{{ item }}"
         state: directory
         owner: root
         group: root
-        mode: u=rwx, g=rx, o=
+        mode: "u=rwx,g=rx,o="
       with_items:
         - configs
         - images
+        - images/amd64-usr/310.1.0
         - profiles
         - sshkeys
 
@@ -72,22 +72,31 @@
 
     - name: Download default images for coreos-ipxe-server
       get_url:
-        url: "http://storage.core-os.net/coreos/amd64-usr/310.1.0/{{ item.dest }}"
-        dest: "{{ coreos_ipxe_server_data_dir }}/images/amd64-usr/310.1.0/{{ item.dest }}"
+        url: "http://storage.core-os.net/coreos/amd64-usr/310.1.0/{{ item }}"
+        dest: "{{ coreos_ipxe_server_data_dir }}/images/amd64-usr/310.1.0/{{ item }}"
         owner: root
         group: root
-        mode: u=rw, g=r, o=
+        mode: "u=rw,g=r,o="
       with_items:
         - coreos_production_pxe_image.cpio.gz
         - coreos_production_pxe.vmlinuz
 
     - name: Create coreos-ipxe-server service (systemd)
-      template:
-        src: coreos-ipxe-server.service.j2
+      copy:
+        src: coreos-ipxe-server.service
         dest: /lib/systemd/system/coreos-ipxe-server.service
         owner: root
         group: root
-        mode: u=rwx, g=rx, o=
+        mode: "u=rwx,g=rx,o="
+
+    - name: Link coreos-ipxe-server service (systemd)
+      file:
+        src: /lib/systemd/system/coreos-ipxe-server.service
+        dest: /etc/systemd/system/multi-user.target.wants/coreos-ipxe-server.service
+        state: link
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
 
     - name: Start coreos-ipxe-server service (systemd)
       systemd:
@@ -97,12 +106,13 @@
         daemon_reload: yes
 
     - name: Install mcp2-dhcp-server
-      get_url:
-        url: "https://github.com/DimensionDataResearch/mcp2-dhcp-server/releases/download/v{{ mcp2_dhcp_server_version }}/mcp2-dhcp-server"
-        dest: /usr/local/bin/mcp2-dhcp-server
+      unarchive:
+        src: "https://github.com/DimensionDataResearch/mcp2-dhcp-server/releases/download/v{{ mcp2_dhcp_server_version }}/mcp2-dhcp-server.v{{ mcp2_dhcp_server_version }}.linux-amd64.zip"
+        dest: /usr/local/bin
+        remote_src: yes
         owner: root
         group: root
-        mode: u=rwx, g=rx, o=
+        mode: "u=rwx,g=rx,o="
 
     - name: Configure mcp2-dhcp-server
       template:
@@ -110,7 +120,7 @@
         dest: /etc/mcp2-dhcp-server.yml
         owner: root
         group: root
-        mode: u=rwx, g=rx, o=
+        mode: "u=rwx,g=rx,o="
 
     - name: Create mcp2-dhcp-server service (systemd)
       copy:
@@ -118,7 +128,16 @@
         dest: /lib/systemd/system/mcp2-dhcp-server.service
         owner: root
         group: root
-        mode: u=rwx, g=rx, o=
+        mode: "u=rwx,g=rx,o="
+
+    - name: Link mcp2-dhcp-server service (systemd)
+      file:
+        src: /lib/systemd/system/mcp2-dhcp-server.service
+        dest: /etc/systemd/system/multi-user.target.wants/mcp2-dhcp-server.service
+        state: link
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
 
     - name: Start mcp2-dhcp-server service (systemd)
       systemd:

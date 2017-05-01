@@ -8,7 +8,7 @@ ConditionPathExists=/etc/default/coreos-ipxe-server
 [Service]
 Type=simple
 EnvironmentFile=/etc/default/coreos-ipxe-server
-ExecStart=/usr/local/bin/coreos-ixpe-server
+ExecStart=/usr/local/bin/coreos-ipxe-server
 
 [Install]
 WantedBy=multi-user.target

@@ -6,10 +6,10 @@ mcp:
 network:
   interface:  "{{ dhcp_interface }}"
   vlan_id:    "{{ mcp_vlan_id }}"
-  service_ip: "{{ private_ipv4 }}"
+  service_ip: "{{ dhcp_service_ip }}"
 
 ipxe:
   enable:       true
-  port:         {{ ipxe_port }}
-  boot_image:   "{{ ipxe_boot_image }}"
+  port:         "{{ ipxe_port }}"
+  boot_image:   "{{ pxe_boot_image }}"
   boot_script:  "{{ ipxe_boot_script }}"
