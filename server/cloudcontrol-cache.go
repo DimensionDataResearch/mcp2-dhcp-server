@@ -129,7 +129,7 @@ func (service *Service) getAllServerTags() (map[string][]compute.TagDetail, erro
 	tagPage.PageSize = 50
 
 	for {
-		tags, err := service.Client.GetAssetTagsByType(compute.AssetTypeServer, tagPage)
+		tags, err := service.Client.GetAssetTagsByType(compute.AssetTypeServer, service.NetworkDomain.DatacenterID, tagPage)
 		if err != nil {
 			if compute.IsAPIErrorCode(err, compute.ResponseCodeUnexpectedError) {
 				break // CloudControl bug - going past last page of tags returns UNEXPECTED_ERROR (i.e. there are no more tags).
