@@ -157,9 +157,9 @@ output "server_name" {
 output "server_public_ipv4" {
     value = "${ddcloud_nat.target_server_nat.public_ipv4}"
 }
-output "server_private_ipv4_primary" {
+output "server_private_ipv4" {
     value = "${ddcloud_server.target_server.primary_network_adapter.0.ipv4}"
 }
-output "server_private_ipv4_service" {
-    value = "${ddcloud_server.target_server.additional_network_adapter.0.ipv4}"
+output "server_vlan_id" {
+    value = "${ddcloud_server.target_server.primary_network_adapter.0.vlan}"
 }
