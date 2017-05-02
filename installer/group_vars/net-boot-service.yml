@@ -9,7 +9,7 @@ coreos_ipxe_server_version: "0.3.0"
 mcp_user:     "{{ lookup('env','MCP_USER') }}"
 mcp_password: "{{ lookup('env','MCP_PASSWORD') }}"
 mcp_region:   "AU"
-mcp_vlan_id:  "dfd5bd62-fb47-46b5-bd6e-b0494a29d42b"
+mcp_vlan_id:  "5aea291a-5fff-4613-bfbf-27a33e9eb94f"
 
 # Server configuration
 coreos_default_ssh_key_file: "~/.ssh/id_rsa.pub" # Use the current user's SSH key
