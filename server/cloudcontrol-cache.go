@@ -65,7 +65,7 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) 
 		for _, server := range servers.Items {
 			// Ignore servers that are being deployed or destroyed.
 			primaryNetworkAdapter := server.Network.PrimaryAdapter
-			if primaryNetworkAdapter.PrivateIPv4Address == nil {
+			if primaryNetworkAdapter.PrivateIPv4Address == nil || primaryNetworkAdapter.MACAddress == nil {
 				continue
 			}
 
@@ -91,7 +91,7 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) 
 
 			for _, additionalNetworkAdapter := range server.Network.AdditionalNetworkAdapters {
 				// Ignore network adapters that are being deployed or destroyed.
-				if additionalNetworkAdapter.PrivateIPv4Address == nil {
+				if additionalNetworkAdapter.PrivateIPv4Address == nil || additionalNetworkAdapter.MACAddress == nil {
 					continue
 				}
 

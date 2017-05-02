@@ -16,11 +16,8 @@ variable "datacenter"           { default = "AU9"}
 // The name of the target network domain.
 variable "networkdomain"        { default = "My Network Domain" }
 
-// The name of the primry VLAN that the server will be attached to.
-variable "vlan_primary"         { default = "My VLAN" }
-
-// The name of the VLAN where DHCP and iPXE services will be provided.
-variable "vlan_service"         { default = "My VLAN" }
+// The name of the VLAN that the server will be attached to.
+variable "vlan"                 { default = "My VLAN" }
 
 // The public (external) IP of the client machine where Terraform / Ansible are running (used to create firewall rule for SSH).
 variable "client_ip"            { default = "1.2.3.4" }
@@ -29,10 +26,7 @@ variable "client_ip"            { default = "1.2.3.4" }
 variable "server_name"          { default = "network-services" }
 
 // The primary IPv4 address for the server to deploy.
-variable "server_primary_ipv4"  { default = "192.168.70.10" }
-
-// The IPv4 address for the server to deploy on which DHCP / PXE / iPXE services are provided.
-variable "server_service_ipv4"  { default = "192.168.70.10" }
+variable "server_ipv4"          { default = "192.168.70.10" }
 
 // The name of the user to install an SSH key for.
 variable "ssh_user" { default = "root" }
@@ -54,19 +48,15 @@ data "ddcloud_networkdomain" "target_networkdomain" {
 }
 
 // Retrieve information about the target VLANs.
-data "ddcloud_vlan" "primary_vlan" {
-    name            = "${var.vlan_primary}"
-    networkdomain   = "${data.ddcloud_networkdomain.target_networkdomain.id}"
-}
-data "ddcloud_vlan" "service_vlan" {
-    name            = "${var.vlan_service}"
+data "ddcloud_vlan" "target_vlan" {
+    name            = "${var.vlan}"
     networkdomain   = "${data.ddcloud_networkdomain.target_networkdomain.id}"
 }
 
 // Deploy an Ubuntu 16.x server to handle network boot services.
 resource "ddcloud_server" "target_server" {
     name            = "${var.server_name}"
-    description     = "DHCP / network boot services for ${var.vlan_primary}."
+    description     = "DHCP / network boot services for ${var.vlan}."
     admin_password  = "${var.ssh_bootstrap_password}"
     auto_start      = true
 
@@ -78,13 +68,8 @@ resource "ddcloud_server" "target_server" {
     networkdomain   = "${data.ddcloud_networkdomain.target_networkdomain.id}"
 
     primary_network_adapter {
-        ipv4    = "${var.server_primary_ipv4}"
-        vlan    = "${data.ddcloud_vlan.primary_vlan.id}"
-    }
-
-    additional_network_adapter {
-        ipv4    = "${var.server_service_ipv4}"
-        vlan    = "${data.ddcloud_vlan.service_vlan.id}"
+        ipv4    = "${var.server_ipv4}"
+        vlan    = "${data.ddcloud_vlan.target_vlan.id}"
     }
 
     tag {
@@ -130,11 +115,12 @@ resource "ddcloud_firewall_rule" "target_server_ssh_inbound" {
 // Install an SSH key on the target server.
 variable "ssh_bootstrap_password" { default = "sn4uSag3s?" }
 
-# Install an SSH key so that Ansible doesn't make us jump through hoops to authenticate.
-resource "null_resource" "target_server_ssh_bootstrap" {
+# Perform initial provisioning, including installation of an SSH key (so that Ansible doesn't make us jump through hoops to authenticate).
+resource "null_resource" "target_server_provision" {
     # Install our SSH public key.
 	provisioner "remote-exec" {
 		inline = [
+            # Install SSH key
 			"mkdir -p ~/.ssh",
 			"chmod 0700 ~/.ssh",
 			"echo '${file(var.ssh_public_key_file)}' > ~/.ssh/authorized_keys",

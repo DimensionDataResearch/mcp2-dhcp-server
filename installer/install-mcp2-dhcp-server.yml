@@ -1,5 +1,5 @@
 ---
-- hosts: role=net-boot-service
+- hosts: net-boot-service
   tasks:
     - name: Install prerequisites
       apt:
@@ -14,6 +14,9 @@
         - mkisofs
         - tftpd-hpa
 
+    - name: Configure firewall
+      command: "ufw disable" # TODO: Come back and correctly configure this!
+
     - name: Get iPXE
       git:
         repo: git://git.ipxe.org/ipxe.git
@@ -21,7 +24,7 @@
         recursive: yes
 
     - name: Build iPXE
-      command: make
+      command: make bin/undionly.kpxe
       args:
         chdir: /usr/local/src/ipxe/src
 
@@ -100,7 +103,7 @@
 
     - name: Start coreos-ipxe-server service (systemd)
       systemd:
-        name: coreos-ipxe-server
+        name: coreos-ipxe-server.service
         enabled: yes
         state: started
         daemon_reload: yes
@@ -141,7 +144,7 @@
 
     - name: Start mcp2-dhcp-server service (systemd)
       systemd:
-        name: coreos-ipxe-server
+        name: mcp2-dhcp-server.service
         enabled: yes
         state: started
         daemon_reload: yes

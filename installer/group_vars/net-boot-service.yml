@@ -15,8 +15,8 @@ mcp_vlan_id:  "dfd5bd62-fb47-46b5-bd6e-b0494a29d42b"
 coreos_default_ssh_key_file: "~/.ssh/id_rsa.pub" # Use the current user's SSH key
 
 # DHCP configuration
-dhcp_interface:   "ens192"
-dhcp_service_ip:  "192.168.6.10" # IP address of the DHCP / iPXE server
+dhcp_interface:   "ens160"
+dhcp_service_ip:  "192.168.5.10" # IP address of the DHCP / iPXE server
 
 # PXE / iPXE configuration
 coreos_ipxe_server_data_dir:  "/opt/coreos-ipxe-server"
