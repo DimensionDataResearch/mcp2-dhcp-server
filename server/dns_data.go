@@ -59,18 +59,19 @@ func (data *DNSData) FindPTR(arpa string) *dns.PTR {
 
 // Add a new set of records for the specified name and IPv4 / IPv6 address.
 func (data *DNSData) Add(name string, ip net.IP) error {
-	switch len(ip) {
-	case net.IPv4len:
+	if ip.To4() != nil {
 		data.addA(name, ip)
 
 		return data.addPTR(name, ip)
-	case net.IPv6len:
+	}
+
+	if ip.To16() != nil {
 		data.addAAAA(name, ip)
 
 		return data.addPTR(name, ip)
-	default:
-		return fmt.Errorf("IP address '%s' has unexpected length (%d)", ip, len(ip))
 	}
+
+	return fmt.Errorf("IP address '%s' has unexpected length (%d)", ip, len(ip))
 }
 
 // AddServer adds or updates the records for the specified CloudControl server.

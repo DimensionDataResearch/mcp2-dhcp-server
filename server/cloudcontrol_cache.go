@@ -82,7 +82,9 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, *DNSDat
 				},
 			}
 			service.parseServerTags(serverMetadata, allServerTags)
-			dnsData.AddNetworkAdapter(server.Name, primaryNetworkAdapter)
+
+			serverFQDN := server.Name + "." + service.DNSSuffix
+			dnsData.AddNetworkAdapter(serverFQDN, primaryNetworkAdapter)
 
 			if service.EnableDebugLogging {
 				log.Printf("\tMAC %s -> %s (%s)\n",
@@ -102,7 +104,7 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, *DNSDat
 					*additionalNetworkAdapter.MACAddress,
 				)
 				serverMetadata.IPv4ByMACAddress[additionalMACAddress] = net.ParseIP(*additionalNetworkAdapter.PrivateIPv4Address)
-				dnsData.AddNetworkAdapter(server.Name, additionalNetworkAdapter)
+				dnsData.AddNetworkAdapter(serverFQDN, additionalNetworkAdapter)
 
 				if service.EnableDebugLogging {
 					log.Printf("\tMAC address %s -> %s (%s)\n",

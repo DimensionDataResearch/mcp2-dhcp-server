@@ -4,14 +4,13 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/DimensionDataResearch/go-dd-cloud-compute/compute"
 	"github.com/miekg/dns"
 	"github.com/spf13/viper"
-
-	"strings"
 
 	dhcp "github.com/krolaw/dhcp4"
 )
@@ -171,7 +170,7 @@ func (service *Service) Initialize() error {
 		if len(service.DNSSuffix) == 0 {
 			return fmt.Errorf("dns.suffix / MCP_DNS_SUFFIX is optional, but cannot be empty")
 		}
-		service.DNSSuffix = strings.TrimSuffix(".", service.DNSSuffix) + "." // Ensure trailing "."
+		service.DNSSuffix = dns.Fqdn(service.DNSSuffix) // Ensure trailing "."
 
 		fallbackAddress := viper.GetString("dns.forward_to.address")
 		if len(fallbackAddress) == 0 {

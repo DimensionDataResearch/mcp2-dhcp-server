@@ -54,11 +54,12 @@ func (server *DHCPServerConnection) ReadFrom(buffer []byte) (bytesRead int, sour
 
 // WriteTo writes data from the specified buffer to the underlying network connection.
 func (server *DHCPServerConnection) WriteTo(buffer []byte, destinationAddress net.Addr) (bytesWritten int, err error) {
-
 	// ipv4 docs state that Src is "specify only", however testing by tfheen
 	// shows that Src IS populated.  Therefore, to reuse the control message,
 	// we set Src to nil to avoid the error "write udp4: invalid argument"
 	server.controlMessage.Src = nil
 
-	return server.networkConnection.WriteTo(buffer, server.controlMessage, destinationAddress)
+	bytesWritten, err = server.networkConnection.WriteTo(buffer, server.controlMessage, destinationAddress)
+
+	return
 }

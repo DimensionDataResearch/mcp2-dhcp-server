@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 
+	"strings"
+
 	"github.com/miekg/dns"
 )
 
@@ -22,13 +24,16 @@ func (service *Service) ServeDNS(send dns.ResponseWriter, request *dns.Msg) {
 	}
 
 	question := request.Question[0]
+	if service.shouldForward(question) {
+		// Anything we don't know how to handle, we just pass on to the fallback server.
+		service.dnsFallback(send, request)
+	}
 
 	switch question.Qtype {
 	case dns.TypeA:
 		typeARecord := data.FindA(question.Name)
 		if typeARecord != nil {
 			service.dnsSendResourceRecord(typeARecord, send, request)
-
 		} else {
 			service.dnsSendNonExistentDomain(send, request)
 		}
@@ -39,7 +44,6 @@ func (service *Service) ServeDNS(send dns.ResponseWriter, request *dns.Msg) {
 		typeAAAARecord := data.FindAAAA(question.Name)
 		if typeAAAARecord != nil {
 			service.dnsSendResourceRecord(typeAAAARecord, send, request)
-
 		} else {
 			service.dnsSendNonExistentDomain(send, request)
 		}
@@ -50,9 +54,9 @@ func (service *Service) ServeDNS(send dns.ResponseWriter, request *dns.Msg) {
 		typePTRRecord := data.FindPTR(question.Name)
 		if typePTRRecord != nil {
 			service.dnsSendResourceRecord(typePTRRecord, send, request)
-
 		} else {
-			service.dnsSendNonExistentDomain(send, request)
+			// For PTR (reverse-lookup), we pass it on to the fallback server if there's no match locally.
+			service.dnsFallback(send, request)
 		}
 
 		break
@@ -63,6 +67,20 @@ func (service *Service) ServeDNS(send dns.ResponseWriter, request *dns.Msg) {
 
 		break
 	}
+}
+
+func (service *Service) shouldForward(question dns.Question) bool {
+	if question.Qtype == dns.TypePTR {
+		log.Printf("shouldForward = false (question.Qtype == dns.TypePTR))")
+		return false // We always have a go at satisfying PTR queries, and only forward if we can't answer them.
+	}
+
+	isExternalDomain := !strings.HasSuffix(question.Name, service.DNSSuffix)
+	log.Printf("shouldForward = %t ('%s', '%s'))",
+		isExternalDomain, question.Name, service.DNSSuffix,
+	)
+
+	return isExternalDomain
 }
 
 func (service *Service) dnsSendResourceRecord(record dns.RR, send dns.ResponseWriter, request *dns.Msg) {

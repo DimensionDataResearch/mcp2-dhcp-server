@@ -8,6 +8,7 @@ import (
 )
 
 func main() {
+	log.SetFlags(0)
 	log.SetOutput(os.Stdout)
 
 	log.Printf("MCP 2.0 DHCP server " + ProductVersion)
@@ -23,4 +24,7 @@ func main() {
 	service.Start()
 
 	fmt.Println("Server is running.")
+
+	// Block forever.
+	select {}
 }

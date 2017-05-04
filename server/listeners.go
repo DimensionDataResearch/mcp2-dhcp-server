@@ -151,15 +151,21 @@ func (listeners *ServiceListeners) serveDHCP() {
 }
 
 func (listeners *ServiceListeners) serveDNS() {
+	mux := dns.NewServeMux()
+	mux.Handle(".", listeners.service)
+
 	listeners.dnsServer = &dns.Server{
-		Addr: fmt.Sprintf("%s:%d", listeners.listenIPv4Address, listeners.service.DNSPort),
-		Net:  "udp",
+		Addr:    fmt.Sprintf("%s:%d", listeners.listenIPv4Address, listeners.service.DNSPort),
+		Net:     "udp",
+		Handler: mux,
 	}
 
 	err := listeners.dnsServer.ListenAndServe()
 	if err != nil && listeners.running {
 		listeners.errorChannel <- err
 	}
+
+	log.Printf("DNS server shutdown.")
 }
 
 func (listeners *ServiceListeners) findListenerInterface() error {
@@ -191,7 +197,7 @@ func (listeners *ServiceListeners) findFirstListenerIPv4Address() error {
 			continue
 		}
 
-		addressIP := interfaceAddress.IP
+		addressIP := interfaceAddress.IP.To4()
 		if len(addressIP) == net.IPv4len {
 			listeners.listenIPv4Address = &addressIP
 
