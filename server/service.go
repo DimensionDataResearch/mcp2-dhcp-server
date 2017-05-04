@@ -124,7 +124,9 @@ func (service *Service) Initialize() error {
 		return err
 	}
 
+	// Subnet mask and default gateway
 	service.DHCPOptions[dhcp.OptionSubnetMask] = vlanNetwork.Mask
+	service.DHCPOptions[dhcp.OptionRouter] = net.ParseIP(service.VLAN.IPv4GatewayAddress).To4()
 
 	service.ServiceIP = net.ParseIP(
 		viper.GetString("network.service_ip"),

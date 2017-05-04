@@ -1,4 +1,4 @@
-VERSION = 0.1.0-alpha5
+VERSION = 0.1.0-alpha6
 
 SERVER_DIRECTORY	= ./server
 BIN_DIRECTORY   = ./_bin

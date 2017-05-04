@@ -1,7 +1,7 @@
 ---
 
 # Server versions
-mcp2_dhcp_server_version:   "0.1.0-alpha5"
+mcp2_dhcp_server_version:   "0.1.0-alpha6"
 coreos_ipxe_server_version: "0.3.0"
 
 # CloudControl connection details.
