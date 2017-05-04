@@ -10,7 +10,9 @@ import (
 func (service *Service) ServeDNS(send dns.ResponseWriter, request *dns.Msg) {
 	data := service.DNSData
 
-	// TODO: Add logging
+	if service.EnableDebugLogging {
+		log.Printf("Received DNS query %d: %s", request.Id, request)
+	}
 
 	if len(request.Question) != 1 {
 		// Anything we don't know how to handle, we just pass on to the fallback server.
@@ -64,6 +66,10 @@ func (service *Service) ServeDNS(send dns.ResponseWriter, request *dns.Msg) {
 }
 
 func (service *Service) dnsSendResourceRecord(record dns.RR, send dns.ResponseWriter, request *dns.Msg) {
+	if service.EnableDebugLogging {
+		log.Printf("Replied with resource record to DNS query %d: %s", request.Id, record.Header())
+	}
+
 	response := new(dns.Msg)
 	response.SetReply(request)
 	response.Authoritative = true
@@ -73,6 +79,10 @@ func (service *Service) dnsSendResourceRecord(record dns.RR, send dns.ResponseWr
 }
 
 func (service *Service) dnsSendServerFailure(send dns.ResponseWriter, request *dns.Msg) {
+	if service.EnableDebugLogging {
+		log.Printf("Replied SERVFAIL to DNS query %d.", request.Id)
+	}
+
 	response := new(dns.Msg)
 	response.SetRcode(request, dns.RcodeServerFailure)
 
@@ -80,6 +90,10 @@ func (service *Service) dnsSendServerFailure(send dns.ResponseWriter, request *d
 }
 
 func (service *Service) dnsSendNonExistentDomain(send dns.ResponseWriter, request *dns.Msg) {
+	if service.EnableDebugLogging {
+		log.Printf("Replied NXDOMAIN to DNS query %d.", request.Id)
+	}
+
 	response := new(dns.Msg)
 	response.SetRcode(request, dns.RcodeServerFailure)
 
@@ -88,6 +102,10 @@ func (service *Service) dnsSendNonExistentDomain(send dns.ResponseWriter, reques
 
 func (service *Service) dnsFallback(send dns.ResponseWriter, request *dns.Msg) {
 	// TODO: Consider implementing a basic cache for forwarded requests / responses.
+
+	if service.EnableDebugLogging {
+		log.Printf("Forwarding unhandled DNS query %d to %s...", request.Id, service.DNSFallbackAddress)
+	}
 
 	response, _, err := service.dnsFallbackClient.Exchange(request, service.DNSFallbackAddress)
 	if err != nil {
@@ -102,5 +120,9 @@ func (service *Service) dnsFallback(send dns.ResponseWriter, request *dns.Msg) {
 		log.Printf("Unable to forward DNS response %d to '%s': %s ",
 			response.Id, service.DNSFallbackAddress, err.Error(),
 		)
+	}
+
+	if service.EnableDebugLogging {
+		log.Printf("Forwarded unhandled DNS query %d.", request.Id)
 	}
 }
