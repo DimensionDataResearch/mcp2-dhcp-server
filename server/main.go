@@ -56,8 +56,9 @@ func main() {
 				listenInterfaceIP, service.DNSPort,
 			)
 
-			// TODO: Work out if this is enough - we may want to explicitly create and store our server.
-			err = dns.ListenAndServe(listenAddress, "udp", service)
+			// TODO: Explicitly create and store our server as a field in Service.
+			server := &dns.Server{Addr: listenAddress, Net: "udp"}
+			err = server.ListenAndServe()
 			if err != nil {
 				log.Panic(err)
 			}
