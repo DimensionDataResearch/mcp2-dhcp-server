@@ -131,10 +131,6 @@ func (service *Service) getAllServerTags() (map[string][]compute.TagDetail, erro
 	for {
 		tags, err := service.Client.GetAssetTagsByType(compute.AssetTypeServer, service.NetworkDomain.DatacenterID, tagPage)
 		if err != nil {
-			if compute.IsAPIErrorCode(err, compute.ResponseCodeUnexpectedError) {
-				break // CloudControl bug - going past last page of tags returns UNEXPECTED_ERROR (i.e. there are no more tags).
-			}
-
 			return nil, err
 		}
 		if tags.IsEmpty() {
@@ -149,6 +145,12 @@ func (service *Service) getAllServerTags() (map[string][]compute.TagDetail, erro
 				serverTags = []compute.TagDetail{tag}
 			}
 			allServerTags[tag.AssetID] = serverTags
+		}
+
+		// CloudControl bug - going past last page of tags returns UNEXPECTED_ERROR (i.e. there are no more tags).
+		// We therefore manually determine whether this is the last page of results.
+		if tags.IsLastPage() {
+			break
 		}
 
 		tagPage.Next()

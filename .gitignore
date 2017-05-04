@@ -29,7 +29,7 @@ _testmain.go
 .DS_Store
 
 # Version info
-version-info.go
+version_info.go
 
 # Terraform
 terraform.tfvars

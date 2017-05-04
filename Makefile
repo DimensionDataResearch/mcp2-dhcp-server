@@ -1,10 +1,10 @@
-VERSION = 0.1.0-alpha6
+VERSION = 0.1.0-beta1
 
 SERVER_DIRECTORY	= ./server
 BIN_DIRECTORY   = ./_bin
 EXECUTABLE_NAME = mcp2-dhcp-server
 DIST_ZIP_PREFIX = $(EXECUTABLE_NAME).v$(VERSION)
-VERSION_INFO_FILE = $(SERVER_DIRECTORY)/version-info.go
+VERSION_INFO_FILE = $(SERVER_DIRECTORY)/version_info.go
 
 REPO_BASE	= github.com/DimensionDataResearch
 REPO_ROOT	= $(REPO_BASE)/mcp2-dhcp-server
