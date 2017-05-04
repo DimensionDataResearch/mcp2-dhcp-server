@@ -52,6 +52,7 @@ type Service struct {
 
 	EnableDebugLogging bool
 
+	listeners     *ServiceListeners
 	stateLock     *sync.Mutex
 	refreshTimer  *time.Ticker
 	cancelRefresh chan bool
@@ -59,7 +60,7 @@ type Service struct {
 
 // NewService creates new Service state.
 func NewService() *Service {
-	return &Service{
+	service := &Service{
 		ServerMetadataByMACAddress:     make(map[string]ServerMetadata),
 		StaticReservationsByMACAddress: make(map[string]StaticReservation),
 		LeasesByMACAddress:             make(map[string]*Lease),
@@ -70,9 +71,12 @@ func NewService() *Service {
 		},
 		stateLock: &sync.Mutex{},
 	}
+	service.listeners = NewServiceListeners(service)
+
+	return service
 }
 
-// Initialize performs initial configuration of the Service.
+// Initialize the service configuration.
 func (service *Service) Initialize() error {
 	// Defaults
 	viper.SetDefault("debug", false)
@@ -240,11 +244,16 @@ func (service *Service) Initialize() error {
 		}
 	}
 
+	err = service.listeners.Initialize()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-// Start polling CloudControl for server metadata.
-func (service *Service) Start() {
+// Start the service.
+func (service *Service) Start() error {
 	service.acquireStateLock("Start")
 	defer service.releaseStateLock("Start")
 
@@ -288,12 +297,34 @@ func (service *Service) Start() {
 			}
 		}
 	}()
+
+	err = service.listeners.Start()
+	if err != nil {
+		return fmt.Errorf("failed to start service listeners: %s",
+			err.Error(),
+		)
+	}
+
+	go func() {
+		for {
+			err := <-service.listeners.Errors
+
+			log.Panic(err)
+		}
+	}()
+
+	return nil
 }
 
-// Stop polling CloudControl for server metadata.
-func (service *Service) Stop() {
+// Stop the service.
+func (service *Service) Stop() error {
 	service.acquireStateLock("Stop")
 	defer service.releaseStateLock("Stop")
+
+	err := service.listeners.Stop()
+	if err != nil {
+		return err
+	}
 
 	if service.cancelRefresh != nil {
 		service.cancelRefresh <- true
@@ -302,6 +333,8 @@ func (service *Service) Stop() {
 
 	service.refreshTimer.Stop()
 	service.refreshTimer = nil
+
+	return nil
 }
 
 func (service *Service) acquireStateLock(reason string) {
