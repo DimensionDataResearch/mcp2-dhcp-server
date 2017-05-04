@@ -11,13 +11,19 @@ import (
 
 // ServiceListeners represents the listeners for all services.
 type ServiceListeners struct {
-	Errors            <-chan error
-	service           *Service
-	listenInterface   *net.Interface
-	listenIPv4Address *net.IP
-	dhcpListener      net.Listener
-	dnsServer         *dns.Server
-	errorChannel      chan error
+	Errors               <-chan error
+	service              *Service
+	listenInterface      *net.Interface
+	listenIPv4Address    *net.IP
+	dnsServer            *dns.Server
+	dhcpServerConnection *DHCPServerConnection
+	running              bool
+	errorChannel         chan error
+}
+
+// IsRunning determines whether the listeners are currently running.
+func (listeners *ServiceListeners) IsRunning() bool {
+	return listeners.running
 }
 
 // NewServiceListeners creates a new ServiceListeners for the specified Service.
@@ -52,45 +58,51 @@ func (listeners *ServiceListeners) Initialize() error {
 
 // Start the service listeners.
 func (listeners *ServiceListeners) Start() error {
-	log.Printf("Starting service listeners (bound to local network interface '%s' / %s...",
-		listeners.service.InterfaceName,
-		listeners.listenIPv4Address,
-	)
-
 	if listeners.listenInterface == nil {
 		return fmt.Errorf("service listeners have not been initialised")
 	}
 
-	go func() {
-		err := listeners.serveDHCP()
-		if err != nil {
-			listeners.errorChannel <- err
-		}
-	}()
+	if listeners.running {
+		return fmt.Errorf("listeners are already running")
+	}
+
+	log.Printf("Starting service listeners (bound to local network interface '%s' / %s...",
+		listeners.service.InterfaceName,
+		listeners.listenIPv4Address,
+	)
+	listeners.running = true
+
+	go listeners.serveDHCP()
 
 	if listeners.service.EnableDNS {
-		go func() {
-			err := listeners.serveDNS()
-			if err != nil {
-				listeners.errorChannel <- err
-			}
-		}()
+		go listeners.serveDNS()
 	}
 
 	return nil
 }
 
 // Stop the service listeners.
-//
-// TODO: Work out how to stop the DHCP listener (may need a custom implementation to make it stoppable).
 func (listeners *ServiceListeners) Stop() error {
+	if listeners.listenInterface == nil {
+		return fmt.Errorf("service listeners have not been initialised")
+	}
+
+	if listeners.running {
+		return fmt.Errorf("listeners are not running")
+	}
+
 	log.Printf("Stopping service listeners (bound to local network interface '%s' / %s...",
 		listeners.service.InterfaceName,
 		listeners.listenIPv4Address,
 	)
+	listeners.running = false
 
-	if listeners.listenInterface == nil {
-		return fmt.Errorf("service listeners have not been initialised")
+	if listeners.dhcpServerConnection != nil {
+		err := listeners.dhcpServerConnection.Close()
+		if err != nil {
+			return err
+		}
+		listeners.dhcpServerConnection = nil
 	}
 
 	if listeners.dnsServer != nil {
@@ -98,22 +110,56 @@ func (listeners *ServiceListeners) Stop() error {
 		if err != nil {
 			return err
 		}
+		listeners.dnsServer = nil
 	}
 
 	return nil
 }
 
-func (listeners *ServiceListeners) serveDHCP() error {
-	return dhcp.ListenAndServeIf(listeners.service.InterfaceName, listeners.service)
+func (listeners *ServiceListeners) serveDHCP() {
+	networkConnection, err := net.ListenPacket("udp4", ":67") // Since DHCP is broadcast, we listen on all addresses but filter by interface index.
+	if err != nil && listeners.running {
+		listeners.errorChannel <- err
+
+		return
+	}
+
+	dhcpServerConnection, err := NewDHCPServerConnection(networkConnection, listeners.listenInterface.Index)
+	if err != nil {
+		if listeners.service.EnableDebugLogging {
+			log.Printf("DHCP server error: %#v", err)
+		}
+
+		if listeners.running {
+			listeners.errorChannel <- err
+		}
+
+		return
+	}
+	listeners.dhcpServerConnection = dhcpServerConnection
+
+	err = dhcp.Serve(listeners.dhcpServerConnection, listeners.service)
+	if err != nil {
+		if listeners.service.EnableDebugLogging {
+			log.Printf("DNS server error: %#v", err)
+		}
+
+		if listeners.running {
+			listeners.errorChannel <- err
+		}
+	}
 }
 
-func (listeners *ServiceListeners) serveDNS() error {
+func (listeners *ServiceListeners) serveDNS() {
 	listeners.dnsServer = &dns.Server{
 		Addr: fmt.Sprintf("%s:%d", listeners.listenIPv4Address, listeners.service.DNSPort),
 		Net:  "udp",
 	}
 
-	return listeners.dnsServer.ListenAndServe()
+	err := listeners.dnsServer.ListenAndServe()
+	if err != nil && listeners.running {
+		listeners.errorChannel <- err
+	}
 }
 
 func (listeners *ServiceListeners) findListenerInterface() error {

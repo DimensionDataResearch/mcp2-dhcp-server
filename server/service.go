@@ -249,6 +249,8 @@ func (service *Service) Initialize() error {
 		return err
 	}
 
+	go service.logListenerErrors()
+
 	return nil
 }
 
@@ -305,14 +307,6 @@ func (service *Service) Start() error {
 		)
 	}
 
-	go func() {
-		for {
-			err := <-service.listeners.Errors
-
-			log.Panic(err)
-		}
-	}()
-
 	return nil
 }
 
@@ -335,6 +329,18 @@ func (service *Service) Stop() error {
 	service.refreshTimer = nil
 
 	return nil
+}
+
+func (service *Service) logListenerErrors() {
+	for {
+		err := <-service.listeners.Errors
+
+		if service.EnableDebugLogging {
+			log.Printf("Listener error: %#v", err.Error())
+		} else {
+			log.Printf("Listener error: %s", err.Error())
+		}
+	}
 }
 
 func (service *Service) acquireStateLock(reason string) {
