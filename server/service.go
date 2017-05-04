@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/DimensionDataResearch/go-dd-cloud-compute/compute"
+	"github.com/miekg/dns"
 	"github.com/spf13/viper"
 
 	"strings"
@@ -39,6 +40,13 @@ type Service struct {
 	ServerMetadataByMACAddress     map[string]ServerMetadata
 	StaticReservationsByMACAddress map[string]StaticReservation
 
+	EnableDNS          bool
+	DNSPort            int
+	DNSSuffix          string
+	DNSData            DNSData
+	DNSFallbackAddress string
+	dnsFallbackClient  *dns.Client
+
 	LeasesByMACAddress map[string]*Lease
 	LeaseDuration      time.Duration
 
@@ -56,6 +64,7 @@ func NewService() *Service {
 		StaticReservationsByMACAddress: make(map[string]StaticReservation),
 		LeasesByMACAddress:             make(map[string]*Lease),
 		LeaseDuration:                  24 * time.Hour,
+		DNSData:                        NewDNSData(),
 		DHCPOptions: dhcp.Options{
 			dhcp.OptionDomainNameServer: []byte{8, 8, 8, 8},
 		},
@@ -67,6 +76,11 @@ func NewService() *Service {
 func (service *Service) Initialize() error {
 	// Defaults
 	viper.SetDefault("debug", false)
+	viper.SetDefault("dns.enable", false)
+	viper.SetDefault("dns.port", 53)
+	viper.SetDefault("dns.suffix", "mcp.")
+	viper.SetDefault("dns.forward_to.address", "8.8.8.8")
+	viper.SetDefault("dns.forward_to.port", 53)
 	viper.SetDefault("ipxe.enable", false)
 	viper.SetDefault("ipxe.port", 4777)
 	viper.SetDefault("ipxe.boot_image", "undionly.kpxe")
@@ -79,6 +93,11 @@ func (service *Service) Initialize() error {
 	viper.BindEnv("MCP_DHCP_INTERFACE", "network.interface")
 	viper.BindEnv("MCP_DHCP_VLAN_ID", "network.vlan_id")
 	viper.BindEnv("MCP_DHCP_SERVICE_IP", "network.service_ip")
+	viper.BindEnv("MCP_DNS_ENABLE", "dns.enable")
+	viper.BindEnv("MCP_DNS_SUFFIX", "dns.suffix")
+	viper.BindEnv("MCP_DNS_PORT", "dns.port")
+	viper.BindEnv("MCP_DNS_FORWARD_TO", "dns.forward_to.address")
+	viper.BindEnv("MCP_DNS_FORWARD_TO_PORT", "dns.forward_to.port")
 	viper.BindEnv("MCP_IPXE_ENABLE", "ipxe.enable")
 	viper.BindEnv("MCP_IPXE_PORT", "ipxe.port")
 	viper.BindEnv("MCP_IPXE_BOOT_IMAGE", "ipxe.boot_image")
@@ -135,6 +154,36 @@ func (service *Service) Initialize() error {
 	service.InterfaceName = viper.GetString("network.interface")
 	if len(service.InterfaceName) == 0 {
 		return fmt.Errorf("network.interface / MCP_DHCP_INTERFACE is required")
+	}
+
+	service.EnableDNS = viper.GetBool("dns.enable")
+	if service.EnableDNS {
+		service.DNSPort = viper.GetInt("dns.port")
+		if service.DNSPort < 53 {
+			return fmt.Errorf("dns.port (%d) is invalid", service.DNSPort)
+		}
+
+		service.DNSSuffix = viper.GetString("dns.suffix")
+		if len(service.DNSSuffix) == 0 {
+			return fmt.Errorf("dns.suffix / MCP_DNS_SUFFIX is optional, but cannot be empty")
+		}
+		service.DNSSuffix = strings.TrimSuffix(".", service.DNSSuffix) + "." // Ensure trailing "."
+
+		fallbackAddress := viper.GetString("dns.forward_to.address")
+		if len(fallbackAddress) == 0 {
+			return fmt.Errorf("dns.forward_to.address / MCP_DNS_FORWARD is optional, but cannot be empty")
+		}
+
+		fallbackPort := viper.GetInt("dns.forward_to.port")
+		if fallbackPort == 0 {
+			return fmt.Errorf("dns.forward_to.port / MCP_DNS_FORWARD_PORT is optional, but cannot be empty")
+		}
+
+		service.DNSFallbackAddress = fmt.Sprintf("%s:%d",
+			fallbackAddress, fallbackPort,
+		)
+
+		service.dnsFallbackClient = &dns.Client{}
 	}
 
 	service.EnableIPXE = viper.GetBool("ipxe.enable")

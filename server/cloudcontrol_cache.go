@@ -27,7 +27,7 @@ func (service *Service) RefreshServerMetadata() error {
 	return service.refreshServerMetadataInternal(true)
 }
 func (service *Service) refreshServerMetadataInternal(acquireStateLock bool) error {
-	serverMetadataByMACAddress, err := service.readServerMetadata()
+	serverMetadataByMACAddress, dnsData, err := service.readServerMetadata()
 	if err != nil {
 		return err
 	}
@@ -37,18 +37,20 @@ func (service *Service) refreshServerMetadataInternal(acquireStateLock bool) err
 		defer service.releaseStateLock("refreshServerMetadataInternal")
 	}
 	service.ServerMetadataByMACAddress = serverMetadataByMACAddress
+	service.DNSData = *dnsData
 
 	return nil
 }
 
 // readServerMetadata creates a map of MAC addresses to server metadata from CloudControl.
-func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) {
+func (service *Service) readServerMetadata() (map[string]ServerMetadata, *DNSData, error) {
 	allServerTags, err := service.getAllServerTags()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	serverMetadataByMACAddress := make(map[string]ServerMetadata)
+	dnsData := NewDNSData()
 
 	page := compute.DefaultPaging()
 	page.PageSize = 50
@@ -56,7 +58,7 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) 
 	for {
 		servers, err := service.Client.ListServersInNetworkDomain(service.NetworkDomain.ID, page)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if servers.IsEmpty() {
 			break
@@ -80,6 +82,7 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) 
 				},
 			}
 			service.parseServerTags(serverMetadata, allServerTags)
+			dnsData.AddNetworkAdapter(server.Name, primaryNetworkAdapter)
 
 			if service.EnableDebugLogging {
 				log.Printf("\tMAC %s -> %s (%s)\n",
@@ -99,6 +102,7 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) 
 					*additionalNetworkAdapter.MACAddress,
 				)
 				serverMetadata.IPv4ByMACAddress[additionalMACAddress] = net.ParseIP(*additionalNetworkAdapter.PrivateIPv4Address)
+				dnsData.AddNetworkAdapter(server.Name, additionalNetworkAdapter)
 
 				if service.EnableDebugLogging {
 					log.Printf("\tMAC address %s -> %s (%s)\n",
@@ -118,7 +122,7 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, error) 
 		page.Next()
 	}
 
-	return serverMetadataByMACAddress, nil
+	return serverMetadataByMACAddress, &dnsData, nil
 }
 
 // Get tags for all servers, keyed by server Id.
