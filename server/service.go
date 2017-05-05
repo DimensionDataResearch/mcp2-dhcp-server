@@ -43,6 +43,7 @@ type Service struct {
 	DNSPort            int
 	DNSSuffix          string
 	DNSData            DNSData
+	DNSTTL      uint32
 	DNSFallbackAddress string
 	dnsFallbackClient  *dns.Client
 
@@ -64,7 +65,6 @@ func NewService() *Service {
 		StaticReservationsByMACAddress: make(map[string]StaticReservation),
 		LeasesByMACAddress:             make(map[string]*Lease),
 		LeaseDuration:                  24 * time.Hour,
-		DNSData:                        NewDNSData(),
 		DHCPOptions: dhcp.Options{
 			dhcp.OptionDomainNameServer: []byte{8, 8, 8, 8},
 		},
@@ -81,6 +81,7 @@ func (service *Service) Initialize() error {
 	viper.SetDefault("debug", false)
 	viper.SetDefault("dns.enable", false)
 	viper.SetDefault("dns.port", 53)
+	viper.SetDefault("dns.default_ttl", 60)
 	viper.SetDefault("dns.suffix", "mcp.")
 	viper.SetDefault("dns.forward_to.address", "8.8.8.8")
 	viper.SetDefault("dns.forward_to.port", 53)
@@ -99,6 +100,7 @@ func (service *Service) Initialize() error {
 	viper.BindEnv("MCP_DNS_ENABLE", "dns.enable")
 	viper.BindEnv("MCP_DNS_SUFFIX", "dns.suffix")
 	viper.BindEnv("MCP_DNS_PORT", "dns.port")
+	viper.BindEnv("MCP_DNS_DEFAULT_TTP", "dns.default_ttl")
 	viper.BindEnv("MCP_DNS_FORWARD_TO", "dns.forward_to.address")
 	viper.BindEnv("MCP_DNS_FORWARD_TO_PORT", "dns.forward_to.port")
 	viper.BindEnv("MCP_IPXE_ENABLE", "ipxe.enable")
@@ -165,6 +167,11 @@ func (service *Service) Initialize() error {
 		if service.DNSPort < 53 {
 			return fmt.Errorf("dns.port (%d) is invalid", service.DNSPort)
 		}
+
+		service.DNSTTL = uint32(
+			viper.GetInt("dns.default_ttl"),
+		)
+		service.DNSData = NewDNSData(service.DNSTTL)
 
 		service.DNSSuffix = viper.GetString("dns.suffix")
 		if len(service.DNSSuffix) == 0 {

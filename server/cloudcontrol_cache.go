@@ -50,7 +50,7 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, *DNSDat
 	}
 
 	serverMetadataByMACAddress := make(map[string]ServerMetadata)
-	dnsData := NewDNSData()
+	dnsData := NewDNSData(service.DNSTTL)
 
 	page := compute.DefaultPaging()
 	page.PageSize = 50

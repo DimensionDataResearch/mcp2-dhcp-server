@@ -14,22 +14,24 @@ type DNSData struct {
 	v6Addresses    map[string]dns.AAAA
 	reverseLookups map[string]dns.PTR
 
-	DefaultTTLSeconds uint32
+	DefaultTTL uint32
 }
 
 // NewDNSData creates a new DNSData.
-func NewDNSData() DNSData {
+func NewDNSData(defaultTTL uint32) DNSData {
 	return DNSData{
 		v4Addresses:       make(map[string]dns.A),
 		v6Addresses:       make(map[string]dns.AAAA),
 		reverseLookups:    make(map[string]dns.PTR),
-		DefaultTTLSeconds: 60,
+		DefaultTTL: defaultTTL,
 	}
 }
 
 // FindA retrieves the A record (if one exists) for the specified name.
 func (data *DNSData) FindA(name string) *dns.A {
-	record, ok := data.v4Addresses[name]
+	fqdn := dns.Fqdn(name)
+
+	record, ok := data.v4Addresses[fqdn]
 	if ok {
 		return &record
 	}
@@ -39,7 +41,9 @@ func (data *DNSData) FindA(name string) *dns.A {
 
 // FindAAAA retrieves the AAAA record (if one exists) for the specified name.
 func (data *DNSData) FindAAAA(name string) *dns.AAAA {
-	record, ok := data.v6Addresses[name]
+	fqdn := dns.Fqdn(name)
+
+	record, ok := data.v6Addresses[fqdn]
 	if ok {
 		return &record
 	}
@@ -49,7 +53,9 @@ func (data *DNSData) FindAAAA(name string) *dns.AAAA {
 
 // FindPTR retrieves the PTR record (if one exists) for the specified ".arpa" address.
 func (data *DNSData) FindPTR(arpa string) *dns.PTR {
-	record, ok := data.reverseLookups[arpa]
+	fqdn := dns.Fqdn(arpa)
+
+	record, ok := data.reverseLookups[fqdn]
 	if ok {
 		return &record
 	}
@@ -59,16 +65,18 @@ func (data *DNSData) FindPTR(arpa string) *dns.PTR {
 
 // Add a new set of records for the specified name and IPv4 / IPv6 address.
 func (data *DNSData) Add(name string, ip net.IP) error {
-	if ip.To4() != nil {
-		data.addA(name, ip)
+	fqdn := dns.Fqdn(name)
 
-		return data.addPTR(name, ip)
+	if ip.To4() != nil {
+		data.addA(fqdn, ip)
+
+		return data.addPTR(fqdn, ip)
 	}
 
 	if ip.To16() != nil {
-		data.addAAAA(name, ip)
+		data.addAAAA(fqdn, ip)
 
-		return data.addPTR(name, ip)
+		return data.addPTR(fqdn, ip)
 	}
 
 	return fmt.Errorf("IP address '%s' has unexpected length (%d)", ip, len(ip))
@@ -99,7 +107,9 @@ func (data *DNSData) AddNetworkAdapter(name string, networkAdapter compute.Virtu
 
 // Remove any records that exist for the specified name.
 func (data *DNSData) Remove(name string) error {
-	aRecord, ok := data.v4Addresses[name]
+	fqdn := dns.Fqdn(name)
+
+	aRecord, ok := data.v4Addresses[fqdn]
 	if ok {
 		arpa, err := dns.ReverseAddr(aRecord.A.String())
 		if err != nil {
@@ -108,9 +118,9 @@ func (data *DNSData) Remove(name string) error {
 
 		delete(data.reverseLookups, arpa)
 	}
-	delete(data.v4Addresses, name)
+	delete(data.v4Addresses, fqdn)
 
-	aaaaRecord, ok := data.v6Addresses[name]
+	aaaaRecord, ok := data.v6Addresses[fqdn]
 	if ok {
 		arpa, err := dns.ReverseAddr(aaaaRecord.AAAA.String())
 		if err != nil {
@@ -119,7 +129,7 @@ func (data *DNSData) Remove(name string) error {
 
 		delete(data.reverseLookups, arpa)
 	}
-	delete(data.v6Addresses, name)
+	delete(data.v6Addresses, fqdn)
 
 	return nil
 }
@@ -136,7 +146,7 @@ func (data *DNSData) addA(name string, ip net.IP) {
 			Name:   name,
 			Rrtype: dns.TypeA,
 			Class:  dns.ClassINET,
-			Ttl:    data.DefaultTTLSeconds,
+			Ttl:    data.DefaultTTL,
 		},
 		A: ip,
 	}
@@ -149,7 +159,7 @@ func (data *DNSData) addAAAA(name string, ip net.IP) {
 			Name:   name,
 			Rrtype: dns.TypeAAAA,
 			Class:  dns.ClassINET,
-			Ttl:    data.DefaultTTLSeconds,
+			Ttl:    data.DefaultTTL,
 		},
 		AAAA: ip,
 	}
@@ -167,7 +177,7 @@ func (data *DNSData) addPTR(name string, ip net.IP) error {
 			Name:   arpa,
 			Rrtype: dns.TypePTR,
 			Class:  dns.ClassINET,
-			Ttl:    data.DefaultTTLSeconds,
+			Ttl:    data.DefaultTTL,
 		},
 		Ptr: name,
 	}

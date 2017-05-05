@@ -9,7 +9,7 @@ import (
 	dns "github.com/miekg/dns"
 )
 
-// ServiceListeners represents the listeners for all services.
+// ServiceListeners holds the listeners for all services.
 type ServiceListeners struct {
 	Errors               <-chan error
 	service              *Service
