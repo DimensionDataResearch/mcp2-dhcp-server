@@ -13,12 +13,49 @@ mcp:
   region: "AU"
 
 network:
-  interface: eth0 # Specify the interface to listen on (for now, only a single interface is supported).
+  # Specify the interface to listen on (for now, only a single interface is supported).
+  interface: eth0
   vlan_id: "42837f37-a0fd-4544-a800-416a1d33f672"
   service_ip: 192.168.70.12
-  start_ip: 192.168.70.20
-  end_ip: 192.168.70.30
 ```
+
+## DNS
+The service can also answer DNS queries for a pseudo-zone whose records come from server metadata in CloudControl.
+It can answer queries for the following record types:
+
+* `A` (name -> IPv4 address)
+* `AAAA` (name -> IPv6 address)
+* `PTR` (IPv4 / IPv6 address -> name)
+
+All other query types (and `PTR` queries that cannot be answered locally) will be forwarded to the fallback server.
+
+If you want to enable DNS, add the following to `mcp2-dhcp-server.yml`:
+
+```yaml
+dns:
+  enable: true
+
+  # The port to listen on.
+  port: 53
+  
+  # The suffix for the pseudo-zone containing MCP servers
+  # For example, if your server is named "server1", then this can be resolved as "server1.my-environment.mcp".
+  #
+  # Any suffix will do, but preferably one that's not a real domain name.
+  suffix: my-environment.mcp
+
+  # The time-to-live (TTL), in seconds, for records in the the pseudo-zone containing MCP servers.
+  default_ttl: 60
+  
+  # This is the fallback DNS server; any queries that cannot be answered locally will be forwarded to 
+  forwarding:
+    to_address: 8.8.8.8
+    to_port: 53
+```
+
+The values above (apart from `enable`) are the default values and can be omitted unless they differ.
+
+Note that (for now) the service will only listen for DNS queries on the first IP address assigned to the network interface defined above in the `network` section.
 
 ## PXE / iPXE
 If you're using iPXE, add the following to `mcp2-dhcp-server.yml`:

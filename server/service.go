@@ -43,7 +43,7 @@ type Service struct {
 	DNSPort            int
 	DNSSuffix          string
 	DNSData            DNSData
-	DNSTTL      uint32
+	DNSTTL             uint32
 	DNSFallbackAddress string
 	dnsFallbackClient  *dns.Client
 
@@ -101,8 +101,8 @@ func (service *Service) Initialize() error {
 	viper.BindEnv("MCP_DNS_SUFFIX", "dns.suffix")
 	viper.BindEnv("MCP_DNS_PORT", "dns.port")
 	viper.BindEnv("MCP_DNS_DEFAULT_TTP", "dns.default_ttl")
-	viper.BindEnv("MCP_DNS_FORWARD_TO", "dns.forward_to.address")
-	viper.BindEnv("MCP_DNS_FORWARD_TO_PORT", "dns.forward_to.port")
+	viper.BindEnv("MCP_DNS_FORWARDING_TO_ADDRESS", "dns.forwarding.to_address")
+	viper.BindEnv("MCP_DNS_FORWARDING_TO_PORT", "dns.forwarding.to_port")
 	viper.BindEnv("MCP_IPXE_ENABLE", "ipxe.enable")
 	viper.BindEnv("MCP_IPXE_PORT", "ipxe.port")
 	viper.BindEnv("MCP_IPXE_BOOT_IMAGE", "ipxe.boot_image")
@@ -179,14 +179,14 @@ func (service *Service) Initialize() error {
 		}
 		service.DNSSuffix = dns.Fqdn(service.DNSSuffix) // Ensure trailing "."
 
-		fallbackAddress := viper.GetString("dns.forward_to.address")
+		fallbackAddress := viper.GetString("dns.forwarding.to_address")
 		if len(fallbackAddress) == 0 {
-			return fmt.Errorf("dns.forward_to.address / MCP_DNS_FORWARD is optional, but cannot be empty")
+			return fmt.Errorf("dns.forwarding.to_address / MCP_DNS_FORWARD_TO_ADDRESS is optional, but cannot be empty")
 		}
 
-		fallbackPort := viper.GetInt("dns.forward_to.port")
+		fallbackPort := viper.GetInt("dns.forwarding.to_port")
 		if fallbackPort == 0 {
-			return fmt.Errorf("dns.forward_to.port / MCP_DNS_FORWARD_PORT is optional, but cannot be empty")
+			return fmt.Errorf("dns.forwarding.to_port / MCP_DNS_FORWARD_TO_PORT is optional, but cannot be empty")
 		}
 
 		service.DNSFallbackAddress = fmt.Sprintf("%s:%d",
