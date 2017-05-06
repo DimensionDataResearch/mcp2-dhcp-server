@@ -82,7 +82,7 @@ func (service *Service) Initialize() error {
 	viper.SetDefault("dns.enable", false)
 	viper.SetDefault("dns.port", 53)
 	viper.SetDefault("dns.default_ttl", 60)
-	viper.SetDefault("dns.suffix", "mcp.")
+	viper.SetDefault("dns.domain_name", "mcp.")
 	viper.SetDefault("dns.forward_to.address", "8.8.8.8")
 	viper.SetDefault("dns.forward_to.port", 53)
 	viper.SetDefault("ipxe.enable", false)
@@ -98,7 +98,7 @@ func (service *Service) Initialize() error {
 	viper.BindEnv("MCP_DHCP_VLAN_ID", "network.vlan_id")
 	viper.BindEnv("MCP_DHCP_SERVICE_IP", "network.service_ip")
 	viper.BindEnv("MCP_DNS_ENABLE", "dns.enable")
-	viper.BindEnv("MCP_DNS_SUFFIX", "dns.suffix")
+	viper.BindEnv("MCP_DNS_DOMAIN_NAME", "dns.domain_name")
 	viper.BindEnv("MCP_DNS_PORT", "dns.port")
 	viper.BindEnv("MCP_DNS_DEFAULT_TTP", "dns.default_ttl")
 	viper.BindEnv("MCP_DNS_FORWARDING_TO_ADDRESS", "dns.forwarding.to_address")
@@ -173,9 +173,9 @@ func (service *Service) Initialize() error {
 		)
 		service.DNSData = NewDNSData(service.DNSTTL)
 
-		service.DNSSuffix = viper.GetString("dns.suffix")
+		service.DNSSuffix = viper.GetString("dns.domain_name")
 		if len(service.DNSSuffix) == 0 {
-			return fmt.Errorf("dns.suffix / MCP_DNS_SUFFIX is optional, but cannot be empty")
+			return fmt.Errorf("dns.domain_name / MCP_DNS_DOMAIN_NAME is optional, but cannot be empty")
 		}
 		service.DNSSuffix = dns.Fqdn(service.DNSSuffix) // Ensure trailing "."
 

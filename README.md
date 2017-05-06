@@ -42,7 +42,7 @@ dns:
   # For example, if your server is named "server1", then this can be resolved as "server1.my-environment.mcp".
   #
   # Any suffix will do, but preferably one that's not a real domain name.
-  suffix: my-environment.mcp
+  domain_name: my-environment.mcp
 
   # The time-to-live (TTL), in seconds, for records in the the pseudo-zone containing MCP servers.
   default_ttl: 60

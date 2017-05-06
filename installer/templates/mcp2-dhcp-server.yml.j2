@@ -1,12 +1,41 @@
+# Configuration for the MCP 2.0 unified network service.
+
 mcp:
-  user: "{{ mcp_user }}"
-  password: "{{ mcp_password }}"
-  region: "{{ mcp_region }}"
+  user:         "{{ mcp_user }}"
+  password:     "{{ mcp_password }}"
+  region:       "{{ mcp_region }}"
 
 network:
-  interface:  "{{ dhcp_interface }}"
-  vlan_id:    "{{ mcp_vlan_id }}"
-  service_ip: "{{ dhcp_service_ip }}"
+  # Specify the interface to listen on (for now, only a single interface is supported).
+  interface:    {{ dhcp_interface }}
+
+  # Specify the Id (from CloudControl) of the VLAN represented by this interface.
+  vlan_id:      "{{ mcp_vlan_id }}"
+
+  # Specify the service IP address to listen on.
+  #
+  # TODO: Remove this in favour of the discovery mechanism used for the DNS listener IP.
+  service_ip:   {{ dhcp_service_ip }}
+
+dns:
+  enable:       {{ dns_enable }}
+
+  # The port to listen on.
+  port:         {{ dns_port }}
+
+  # The suffix for the pseudo-zone containing MCP servers
+  # For example, if your server is named "server1", then this can be resolved as "server1.my-environment.mcp".
+  #
+  # Any suffix will do, but preferably one that's not a real domain name.
+  domain_name:  {{ dns_domain_name }}
+
+  # The time-to-live (TTL), in seconds, for records in the the pseudo-zone containing MCP servers.
+  default_ttl:  {{ dns_default_ttl }}
+
+  # This is the fallback DNS server; any queries that cannot be answered locally will be forwarded to 
+  forwarding:
+    address:    {{ dns_forwarding_address }}
+    port:       {{ dns_forwarding_port }}
 
 ipxe:
   enable:       true
