@@ -41,7 +41,7 @@ type Service struct {
 
 	EnableDNS          bool
 	DNSPort            int
-	DNSSuffix          string
+	DNSDomainName      string
 	DNSData            DNSData
 	DNSTTL             uint32
 	DNSFallbackAddress string
@@ -173,11 +173,11 @@ func (service *Service) Initialize() error {
 		)
 		service.DNSData = NewDNSData(service.DNSTTL)
 
-		service.DNSSuffix = viper.GetString("dns.domain_name")
-		if len(service.DNSSuffix) == 0 {
+		service.DNSDomainName = viper.GetString("dns.domain_name")
+		if len(service.DNSDomainName) == 0 {
 			return fmt.Errorf("dns.domain_name / MCP_DNS_DOMAIN_NAME is optional, but cannot be empty")
 		}
-		service.DNSSuffix = dns.Fqdn(service.DNSSuffix) // Ensure trailing "."
+		service.DNSDomainName = dns.Fqdn(service.DNSDomainName)
 
 		fallbackAddress := viper.GetString("dns.forwarding.to_address")
 		if len(fallbackAddress) == 0 {

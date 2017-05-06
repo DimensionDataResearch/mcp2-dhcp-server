@@ -75,9 +75,9 @@ func (service *Service) shouldForward(question dns.Question) bool {
 		return false // We always have a go at satisfying PTR queries, and only forward if we can't answer them.
 	}
 
-	isExternalDomain := !strings.HasSuffix(question.Name, service.DNSSuffix)
+	isExternalDomain := !strings.HasSuffix(question.Name, service.DNSDomainName)
 	log.Printf("shouldForward = %t ('%s', '%s'))",
-		isExternalDomain, question.Name, service.DNSSuffix,
+		isExternalDomain, question.Name, service.DNSDomainName,
 	)
 
 	return isExternalDomain

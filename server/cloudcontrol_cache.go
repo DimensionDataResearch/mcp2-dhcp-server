@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/DimensionDataResearch/go-dd-cloud-compute/compute"
+	"github.com/miekg/dns"
 )
 
 // ServerMetadata represents metadata for a CloudControl server.
@@ -83,7 +84,7 @@ func (service *Service) readServerMetadata() (map[string]ServerMetadata, *DNSDat
 			}
 			service.parseServerTags(serverMetadata, allServerTags)
 
-			serverFQDN := server.Name + "." + service.DNSSuffix
+			serverFQDN := dns.Fqdn(server.Name + "." + service.DNSDomainName)
 			dnsData.AddNetworkAdapter(serverFQDN, primaryNetworkAdapter)
 
 			if service.EnableDebugLogging {
