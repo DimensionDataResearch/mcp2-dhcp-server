@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/DimensionDataResearch/go-dd-cloud-compute/compute"
+	"github.com/miekg/dns"
 	"github.com/spf13/viper"
-
-	"strings"
 
 	dhcp "github.com/krolaw/dhcp4"
 )
@@ -39,11 +39,20 @@ type Service struct {
 	ServerMetadataByMACAddress     map[string]ServerMetadata
 	StaticReservationsByMACAddress map[string]StaticReservation
 
+	EnableDNS          bool
+	DNSPort            int
+	DNSDomainName      string
+	DNSData            DNSData
+	DNSTTL             uint32
+	DNSFallbackAddress string
+	dnsFallbackClient  *dns.Client
+
 	LeasesByMACAddress map[string]*Lease
 	LeaseDuration      time.Duration
 
 	EnableDebugLogging bool
 
+	listeners     *ServiceListeners
 	stateLock     *sync.Mutex
 	refreshTimer  *time.Ticker
 	cancelRefresh chan bool
@@ -51,7 +60,7 @@ type Service struct {
 
 // NewService creates new Service state.
 func NewService() *Service {
-	return &Service{
+	service := &Service{
 		ServerMetadataByMACAddress:     make(map[string]ServerMetadata),
 		StaticReservationsByMACAddress: make(map[string]StaticReservation),
 		LeasesByMACAddress:             make(map[string]*Lease),
@@ -61,12 +70,21 @@ func NewService() *Service {
 		},
 		stateLock: &sync.Mutex{},
 	}
+	service.listeners = NewServiceListeners(service)
+
+	return service
 }
 
-// Initialize performs initial configuration of the Service.
+// Initialize the service configuration.
 func (service *Service) Initialize() error {
 	// Defaults
 	viper.SetDefault("debug", false)
+	viper.SetDefault("dns.enable", false)
+	viper.SetDefault("dns.port", 53)
+	viper.SetDefault("dns.default_ttl", 60)
+	viper.SetDefault("dns.domain_name", "mcp.")
+	viper.SetDefault("dns.forward_to.address", "8.8.8.8")
+	viper.SetDefault("dns.forward_to.port", 53)
 	viper.SetDefault("ipxe.enable", false)
 	viper.SetDefault("ipxe.port", 4777)
 	viper.SetDefault("ipxe.boot_image", "undionly.kpxe")
@@ -79,6 +97,12 @@ func (service *Service) Initialize() error {
 	viper.BindEnv("MCP_DHCP_INTERFACE", "network.interface")
 	viper.BindEnv("MCP_DHCP_VLAN_ID", "network.vlan_id")
 	viper.BindEnv("MCP_DHCP_SERVICE_IP", "network.service_ip")
+	viper.BindEnv("MCP_DNS_ENABLE", "dns.enable")
+	viper.BindEnv("MCP_DNS_DOMAIN_NAME", "dns.domain_name")
+	viper.BindEnv("MCP_DNS_PORT", "dns.port")
+	viper.BindEnv("MCP_DNS_DEFAULT_TTP", "dns.default_ttl")
+	viper.BindEnv("MCP_DNS_FORWARDING_TO_ADDRESS", "dns.forwarding.to_address")
+	viper.BindEnv("MCP_DNS_FORWARDING_TO_PORT", "dns.forwarding.to_port")
 	viper.BindEnv("MCP_IPXE_ENABLE", "ipxe.enable")
 	viper.BindEnv("MCP_IPXE_PORT", "ipxe.port")
 	viper.BindEnv("MCP_IPXE_BOOT_IMAGE", "ipxe.boot_image")
@@ -137,6 +161,41 @@ func (service *Service) Initialize() error {
 		return fmt.Errorf("network.interface / MCP_DHCP_INTERFACE is required")
 	}
 
+	service.EnableDNS = viper.GetBool("dns.enable")
+	if service.EnableDNS {
+		service.DNSPort = viper.GetInt("dns.port")
+		if service.DNSPort < 53 {
+			return fmt.Errorf("dns.port (%d) is invalid", service.DNSPort)
+		}
+
+		service.DNSTTL = uint32(
+			viper.GetInt("dns.default_ttl"),
+		)
+		service.DNSData = NewDNSData(service.DNSTTL)
+
+		service.DNSDomainName = viper.GetString("dns.domain_name")
+		if len(service.DNSDomainName) == 0 {
+			return fmt.Errorf("dns.domain_name / MCP_DNS_DOMAIN_NAME is optional, but cannot be empty")
+		}
+		service.DNSDomainName = dns.Fqdn(service.DNSDomainName)
+
+		fallbackAddress := viper.GetString("dns.forwarding.to_address")
+		if len(fallbackAddress) == 0 {
+			return fmt.Errorf("dns.forwarding.to_address / MCP_DNS_FORWARD_TO_ADDRESS is optional, but cannot be empty")
+		}
+
+		fallbackPort := viper.GetInt("dns.forwarding.to_port")
+		if fallbackPort == 0 {
+			return fmt.Errorf("dns.forwarding.to_port / MCP_DNS_FORWARD_TO_PORT is optional, but cannot be empty")
+		}
+
+		service.DNSFallbackAddress = fmt.Sprintf("%s:%d",
+			fallbackAddress, fallbackPort,
+		)
+
+		service.dnsFallbackClient = &dns.Client{}
+	}
+
 	service.EnableIPXE = viper.GetBool("ipxe.enable")
 	if service.EnableIPXE {
 		service.IPXEPort = viper.GetInt("ipxe.port")
@@ -191,11 +250,18 @@ func (service *Service) Initialize() error {
 		}
 	}
 
+	err = service.listeners.Initialize()
+	if err != nil {
+		return err
+	}
+
+	go service.logListenerErrors()
+
 	return nil
 }
 
-// Start polling CloudControl for server metadata.
-func (service *Service) Start() {
+// Start the service.
+func (service *Service) Start() error {
 	service.acquireStateLock("Start")
 	defer service.releaseStateLock("Start")
 
@@ -239,12 +305,26 @@ func (service *Service) Start() {
 			}
 		}
 	}()
+
+	err = service.listeners.Start()
+	if err != nil {
+		return fmt.Errorf("failed to start service listeners: %s",
+			err.Error(),
+		)
+	}
+
+	return nil
 }
 
-// Stop polling CloudControl for server metadata.
-func (service *Service) Stop() {
+// Stop the service.
+func (service *Service) Stop() error {
 	service.acquireStateLock("Stop")
 	defer service.releaseStateLock("Stop")
+
+	err := service.listeners.Stop()
+	if err != nil {
+		return err
+	}
 
 	if service.cancelRefresh != nil {
 		service.cancelRefresh <- true
@@ -253,6 +333,20 @@ func (service *Service) Stop() {
 
 	service.refreshTimer.Stop()
 	service.refreshTimer = nil
+
+	return nil
+}
+
+func (service *Service) logListenerErrors() {
+	for {
+		err := <-service.listeners.Errors
+
+		if service.EnableDebugLogging {
+			log.Printf("Listener error: %#v", err.Error())
+		} else {
+			log.Printf("Listener error: %s", err.Error())
+		}
+	}
 }
 
 func (service *Service) acquireStateLock(reason string) {

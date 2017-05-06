@@ -5,11 +5,10 @@ import (
 	"log"
 
 	"os"
-
-	dhcp "github.com/krolaw/dhcp4"
 )
 
 func main() {
+	log.SetFlags(0)
 	log.SetOutput(os.Stdout)
 
 	log.Printf("MCP 2.0 DHCP server " + ProductVersion)
@@ -18,15 +17,14 @@ func main() {
 	service := NewService()
 	err := service.Initialize()
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	fmt.Println("Server is starting...")
 	service.Start()
 
 	fmt.Println("Server is running.")
-	err = dhcp.ListenAndServeIf(service.InterfaceName, service)
-	if err != nil {
-		log.Fatal(err)
-	}
+
+	// Block forever.
+	select {}
 }
