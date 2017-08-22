@@ -14,19 +14,25 @@ variable "mcp_region"           { default = "AU"}
 variable "datacenter"           { default = "AU9"}
 
 // The name of the target network domain.
-variable "networkdomain"        { default = "My Network Domain" }
+variable "networkdomain"        { default = "AU9_MS_CICD_Domain" }
 
 // The name of the VLAN that the server will be attached to.
-variable "vlan"                 { default = "My VLAN" }
+variable "vlan"                 { default = "AU09_MS_CICD_Domain_POC_MC" }
 
 // The public (external) IP of the client machine where Terraform / Ansible are running (used to create firewall rule for SSH).
-variable "client_ip"            { default = "1.2.3.4" }
+variable "client_ip"            { default = "211.27.8.15" }
 
 // The name of the server to deploy.
-variable "server_name"          { default = "network-services" }
+variable "server_name"          { default = "dhcp_boot_server" }
+variable "rancher_os1"           { default = "au09mciros1"}
 
 // The primary IPv4 address for the server to deploy.
-variable "server_ipv4"          { default = "192.168.70.10" }
+variable "server_ipv4"          { default = "10.0.1.10" }
+//variable "rancher1_ipv4"        { default = "10.0.1.6"}
+
+// Rancher Server name prefix
+variable "rancheros_servername"  { default = "au09mciros"}
+variable "rancheros_numberof"    { default = 3}
 
 // The name of the user to install an SSH key for.
 variable "ssh_user" { default = "root" }
@@ -59,7 +65,7 @@ resource "ddcloud_server" "target_server" {
     description     = "DHCP / network boot services for ${var.vlan}."
     admin_password  = "${var.ssh_bootstrap_password}"
     auto_start      = true
-
+    
     image = "Ubuntu 16.04 64-bit 2 CPU"
 
     memory_gb       = 2
@@ -77,6 +83,34 @@ resource "ddcloud_server" "target_server" {
         value   = "net-boot-service"
     }
 }
+
+// Deploy Blank VM for RancherOS
+
+resource "ddcloud_server" "rancher_server" {
+    count =  "${var.rancheros_numberof}"
+    name            = "${var.rancheros_servername}${count.index}"
+    description     = "${var.rancheros_servername}${count.index}  on ${var.vlan}."
+    //admin_password  = "${var.ssh_bootstrap_password}"
+    auto_start      = false
+    image = "rancher_pxe_boot"
+    
+
+    memory_gb       = 4
+    cpu_count       = 2
+
+    networkdomain   = "${data.ddcloud_networkdomain.target_networkdomain.id}"
+
+    primary_network_adapter {
+        //ipv4    = "${var.rancher1_ipv4}"
+        vlan    = "${data.ddcloud_vlan.target_vlan.id}"
+    }
+
+    tag {
+        name    = "roles"
+        value   = "rancheros"
+    }
+}
+
 
 // Expose via public IP
 resource "ddcloud_nat" "target_server_nat" {

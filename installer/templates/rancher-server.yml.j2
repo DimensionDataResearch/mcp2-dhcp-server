@@ -1,0 +1,40 @@
+#cloud-config                                                                                                                                                               
+write_files:                                                                                                                                                                
+  - path: /opt/rancher/bin/install.yml                                                                                                                                      
+    permissions: "0755"                                                                                                                                                     
+    content: |                                                                                                                                                              
+      #cloud-config                                                                                                                                                         
+      hostname: {{ mcp_server_hostname }}                                                                                                                                            
+      rancher:                                                                                                                                                              
+        network:                                                                                                                                                            
+          interfaces:                                                                                                                                                       
+            eth*:                                                                                                                                                           
+              eth*:                                                                                                                                                           
+              dhcp: false                                                                                                                                                   
+            eth0:                                                                                                                                                           
+              addresses:                                                                                                                                                    
+               - {{ rancher_agent_ip}}/24                                                                                                                                               
+               - {{ rancher_agent_ipv6}}/64                                                                                                                    
+              gateway: {{ rancheros_ipv4_defaultgateway }}                                                                                                                                           
+              gateway_ipv6: {{ rancheros_ipv6_defaultgateway }}                                                                                                                           
+              mtu: 1500 
+          dns:
+            nameservers:
+            - {{ dns_forwarding_address }}      
+        services:
+          rancher-agent1:
+            image: {{ rancher_agent_version }}
+            command: {{ rancher_agent_add_url }}
+            privileged: true
+            volumes:
+              - /var/run/docker.sock:/var/run/docker.sock
+              - /var/lib/rancher:/var/lib/rancher
+            environment:
+              CATTLE_AGENT_IP: {{ rancher_agent_ip }}                                                                                                                                                                                                                                                                                                    
+      ssh_authorized_keys:                                                                                                                                                  
+        - ssh-rsa {{ rancheros_rsa_key }}                                                                                                    
+  - path: /opt/rancher/bin/start.sh                                                                                                                                         
+    permissions: "0755"                                                                                                                                                     
+    content: |                                                                                                                                                              
+      #!/bin/bash                                                                                                                                                           
+      echo Y | sudo ros install -f -c /opt/rancher/bin/install.yml -d /dev/sda 

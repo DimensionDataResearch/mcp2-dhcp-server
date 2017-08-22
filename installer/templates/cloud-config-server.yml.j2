@@ -1,0 +1,18 @@
+mcp:
+  user: "{{ mcp_user }}"
+  password: "{{ mcp_password }}"
+  region: "{{ mcp_region }}"
+
+network:
+  vlan_id: "{{ mcp_vlan_id }}"
+  
+
+rancher_os:
+  network:
+    dns:
+       nameservers: "{{ dns_forwarding_address }}"
+  SSHPublicKey: "{{ rancheros_rsa_key }}"
+
+rancher_agent:
+  version: "{{ rancher_agent_version }}" 
+  url: "{{ rancher_agent_add_url }}"

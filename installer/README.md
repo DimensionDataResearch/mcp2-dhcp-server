@@ -13,7 +13,8 @@ Requires:
 5. `terraform apply`
 6. `terraform refresh`
 7. `cd ..`
-8. `ansible all -m ping` (ensure you get a valid response)
+8. `ansible dhcp_boot_server -m ping` (ensure you get a valid response if not check firewall rules)
 9. Update variables in `group_vars/net-boot-service.yml`.
 10. `ansible-playbook install-mcp2-dhcp-server`
+11. When completed boot the rancheros vms and they should autobuild and appear in your rancher environemnt
 

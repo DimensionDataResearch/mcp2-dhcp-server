@@ -1,0 +1,10 @@
+[Unit]
+Description="Cloud Config Server"
+Documentation="https://github.com/DimensionDataResearch/dd-rancheros-cloud-config#readme"
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/cloud-config-server.yml
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cloud-config-server
