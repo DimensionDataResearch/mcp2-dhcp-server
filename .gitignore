@@ -51,3 +51,7 @@ ansible.log
 *.retry
 #Ignore OVF
 ovf
+installer/ovf/rancher_pxe_boot_latest-disk1.vmdk
+installer/ovf/rancher_pxe_boot_latest.mf
+installer/ovf/rancher_pxe_boot_latest.ovf
+installer/ovf/rancher_pxe_boot_latest-disk1.vmdk
