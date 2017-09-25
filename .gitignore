@@ -7,6 +7,16 @@
 _bin
 _obj
 _test
+<<<<<<< HEAD
+<<<<<<< HEAD
+vars
+environments
+CICD
+
+=======
+>>>>>>> parent of 31fa745... Updates to include NFS on the DHCP server as an option
+=======
+>>>>>>> parent of 31fa745... Updates to include NFS on the DHCP server as an option
 
 
 # Architecture specific extensions/prefixes
@@ -39,3 +49,5 @@ terraform.tfstate*
 # Ansible
 ansible.log
 *.retry
+#Ignore OVF
+ovf
