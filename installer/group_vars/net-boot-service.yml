@@ -33,13 +33,13 @@ ipxe_default_profile:         "development"
 ipxe_port:                    19123
 ipxe_listen_address:          "0.0.0.0:{{ ipxe_port }}" # By default, listen on all addresses
 ipxe_base_address:            "{{ private_ipv4 }}:{{ ipxe_port }}" # Direct clients to this address, specifically
-ipxe_base_url:                "http://{{ ipxe_base_address }}/"
+ipxe_base_url:                "http://{{ ipxe_base_address }}"
 #ipxe_boot_script:             "{{ ipxe_base_url }}?profile={{ ipxe_default_profile }}"
-ipxe_boot_script:             "{{ private_ipv4 }}/rancheros.ipxe"
+ipxe_boot_script:             "http://{{ private_ipv4 }}/rancheros.ipxe"
 # RancherOS Specific
 
 rancheros_rsa_key:             "AAAAB3NzaC1yc2EAAAADAQABAAABAQCmNeV/W/BNuxlxJCtSmmZ+5Cg4R7qA+H0ndKEci8bke8pbxwrkga4Tmmed5bH/uaHe1s4eqn/eECHjIXmfKWyIQmQxIdjz7Z4NIUPhGRfDvvLIosVfy9WLutiDjXfo7mqeC8ctQ5bBU6VYQaXtgLSAL6KjrKOgOVqmnF0wdCtz+4VkKYGbL04vG7YqFeEGHozasOeQW3zB4a8BIvZHwSeM9bhXOqnQMdrQ5w3uggCgKB3QX6bkjThRwwpivqB6Er/jKReBTsx1qwDLLNi03VJl1vqTMpqfhq1zQJIDf2I9S+5w4sP4wfSu6EAp3sJo2a18Nmd4K18GujNxVDzKTRDf"
-rancheros_ipxe_base_address:   "http://{{ private_ipv4 }}/"
+rancheros_ipxe_base_address:   "http://{{ private_ipv4 }}"
 #rancheros_ipxe_boot_script:    "http://{{ private_ipv4 }}/rancheros.ipxe"
 rancheros_version:             "v1.0.4"
 #mcp_server_hostname:           "au09mciros1"

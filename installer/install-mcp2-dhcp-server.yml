@@ -17,7 +17,7 @@
         - nfs-kernel-server
       tags:
         - common
-
+    
     - name: Configure firewall
       command: "ufw disable" # TODO: Come back and correctly configure this!
       tags:
@@ -291,6 +291,17 @@
         - rancheros
 
 # Setup NFS for RancherNFS
+#    - name: Rebooting to Ensure SDB is available
+#        shell: reboot
+#        async: 0
+#        poll: 0
+#        tags:
+#         - rancherosnfs
+#      
+#    - name: Task3 waiting for server to come back after Reboot
+#        local_action: wait_for host={{ ansible_ssh_host }} state=started
+#        tags:
+#         - rancherosnfs
 #Create Partition
     - parted:
         device: /dev/sdb
