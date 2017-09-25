@@ -7,6 +7,33 @@
 _bin
 _obj
 _test
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> 82fd5496769a5c56fcf4117aa39061bf8b4b3a90
+=======
+>>>>>>> 82fd5496769a5c56fcf4117aa39061bf8b4b3a90
+vars
+environments
+CICD
+
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> parent of 31fa745... Updates to include NFS on the DHCP server as an option
+=======
+>>>>>>> parent of 31fa745... Updates to include NFS on the DHCP server as an option
+>>>>>>> 82fd5496769a5c56fcf4117aa39061bf8b4b3a90
+=======
+=======
+>>>>>>> parent of 31fa745... Updates to include NFS on the DHCP server as an option
+>>>>>>> 82fd5496769a5c56fcf4117aa39061bf8b4b3a90
+=======
+>>>>>>> parent of 31fa745... Updates to include NFS on the DHCP server as an option
 
 
 # Architecture specific extensions/prefixes
@@ -39,3 +66,5 @@ terraform.tfstate*
 # Ansible
 ansible.log
 *.retry
+#Ignore OVF
+ovf
