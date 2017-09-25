@@ -1,6 +1,6 @@
 # Server versions
 mcp2_dhcp_server_version:   "0.1.0-beta1"
-cloud_config_server:        "0.0.1-beta1"
+cloud_config_server:        "0.0.1-beta3"
 coreos_ipxe_server_version: "0.3.0"
 
 # CloudControl connection details.
@@ -8,14 +8,14 @@ coreos_ipxe_server_version: "0.3.0"
 mcp_user:     "{{ lookup('env','MCP_USER') }}"
 mcp_password: "{{ lookup('env','MCP_PASSWORD') }}"
 mcp_region:   "AU"
-mcp_vlan_id:  "0aab80ba-80a8-4d57-91fd-6d1264108695"
+mcp_vlan_id:  "3250eb64-8037-43f0-b04f-2d1de1e5cc4b"
 
 # Server configuration
 coreos_default_ssh_key_file: "~/.ssh/id_rsa.pub" # Use the current user's SSH key
 
 # DHCP configuration
 dhcp_interface:   "ens160"
-dhcp_service_ip:  "10.0.1.10" # IP address of the DHCP / iPXE server
+dhcp_service_ip:  "10.2.2.10" # IP address of the DHCP / iPXE server
 
 # DNS configuration
 dns_enable: false
@@ -46,7 +46,7 @@ rancheros_version:             "v1.0.4"
 # Only used for initial PXE boot, if anything goes wrong you can log in from console with rancher user
 rancherpassword:               "DevAdmin123"
 # Rancher Host add URL and Token
-rancher_agent_add_url:         "https://rancherlab.itaas-cloud.com/v1/scripts/D76D1CCEB1F16B8AB98E:1483142400000:bTZtZy3fRsW3QY0KjKeUS66U"
+rancher_agent_add_url:         "https://rancherlab.itaas-cloud.com/v1/scripts/00873662D526E62B1F97:1483142400000:k7wZDCXQmgC0kIWkJmjSAldWeqc"
 rancher_agent_version:         "rancher/agent:v1.2.2"
 #rancher_agent_ip:              "10.0.1.6"
 #rancher_agent_ipv6:            "2402:9900:111:1499:b:e837:ca26:7d01"
