@@ -146,6 +146,7 @@
         src: "https://github.com/DimensionDataResearch/mcp2-dhcp-server/releases/download/v{{ mcp2_dhcp_server_version }}/mcp2-dhcp-server.v{{ mcp2_dhcp_server_version }}.linux-amd64.zip"
         dest: /usr/local/bin
         remote_src: yes
+        keep_newer: yes
         owner: root
         group: root
         mode: "u=rwx,g=rx,o="
@@ -200,6 +201,7 @@
         src: "https://github.com/DimensionDataResearch/dd-rancheros-cloud-config/releases/download/v{{ cloud_config_server }}/cloud-config-server.v{{cloud_config_server}}.linux-amd64.zip"
         dest: /usr/local/bin
         remote_src: yes
+        keep_newer: yes
         owner: root
         group: root
         mode: "u=rwx,g=rx,o="
