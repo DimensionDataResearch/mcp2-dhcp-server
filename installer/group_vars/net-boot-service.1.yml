@@ -1,0 +1,56 @@
+# Server versions
+#mcp2_dhcp_server_version:   "0.1.0-beta1"
+#cloud_config_server:        "0.0.1-beta3"
+#coreos_ipxe_server_version: "0.3.0"
+
+# CloudControl connection details.
+# Place username and password in MCP_USERNAME / MCP_PASSWORD environment variables.
+mcp_user:     "{{ lookup('env','MCP_USER') }}"
+mcp_password: "{{ lookup('env','MCP_PASSWORD') }}"
+mcp_region:   "{{ lookup('env','MCP_REGION') }}"
+mcp_vlan_id:  "{{ lookup('env','MCP_VLAN_ID') }}"
+
+# Server configuration
+#coreos_default_ssh_key_file: "~/.ssh/id_rsa.pub" # Use the current user's SSH key
+
+# DHCP configuration
+dhcp_interface:   "ens160"
+dhcp_service_ip:  "{{ lookup('env','DHCP_SERVICE_IP') }}" # IP address of the DHCP / iPXE server
+
+# DNS configuration
+dns_enable: false
+dns_port: 53
+dns_domain_name: mcp # "server1" -> "server1.mcp"
+dns_default_ttl: 60 # Seconds
+dns_forwarding_address: 8.8.8.8
+dns_forwarding_port: 53
+
+# PXE / iPXE configuration
+coreos_ipxe_server_data_dir:  "/opt/coreos-ipxe-server"
+pxe_boot_image:               "undionly.kpxe"
+ipxe_default_profile:         "development"
+#ipxe_port:                   4777
+ipxe_port:                    19123
+ipxe_listen_address:          "0.0.0.0:{{ ipxe_port }}" # By default, listen on all addresses
+ipxe_base_address:            "{{ lookup('env','DHCP_SERVICE_IP') }}:{{ ipxe_port }}" # Direct clients to this address, specifically
+ipxe_base_url:                "http://{{ ipxe_base_address }}"
+#ipxe_boot_script:             "{{ ipxe_base_url }}?profile={{ ipxe_default_profile }}"
+ipxe_boot_script:             "http://{{ lookup('env','DHCP_SERVICE_IP') }}/rancheros.ipxe"
+# RancherOS Specific
+
+rancheros_rsa_key:             "{{ lookup('env','RSA_KEY') }}"
+rancheros_ipxe_base_address:   "http://{{ lookup('env','DHCP_SERVICE_IP') }}"
+#rancheros_ipxe_boot_script:    "http://{{ private_ipv4 }}/rancheros.ipxe"
+rancheros_version:             "{{ lookup('env','RANCHEROS_VERSION') }}"
+#mcp_server_hostname:           "au09mciros1"
+# Only used for initial PXE boot, if anything goes wrong you can log in from console with rancher user
+rancherpassword:               "{{ lookup('env','RANCHEROS_PASSWORD') }}"
+# Rancher Host add URL and Token
+rancher_agent_add_url:         "{{ lookup('env','RANCHER_AGENT_URL') }}"
+rancher_agent_version:         "{{ lookup('env','RANCHER_AGENT_VERSION') }}"
+#rancher_agent_ip:              "10.0.1.6"
+#rancher_agent_ipv6:            "2402:9900:111:1499:b:e837:ca26:7d01"
+#rancheros_ipv4_defaultgateway: "10.0.1.1"
+#rancheros_ipv6_defaultgateway: "2402:9900:111:1499::1"
+
+
