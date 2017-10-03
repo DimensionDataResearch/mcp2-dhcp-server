@@ -14,7 +14,7 @@ mcp_vlan_id:  "{{ lookup('env','MCP_VLAN_ID') }}"
 #coreos_default_ssh_key_file: "~/.ssh/id_rsa.pub" # Use the current user's SSH key
 
 # DHCP configuration
-dhcp_interface:   "ens160"
+dhcp_interface:   "eth0"
 dhcp_service_ip:  "{{ lookup('env','DHCP_SERVICE_IP') }}" # IP address of the DHCP / iPXE server
 
 # DNS configuration

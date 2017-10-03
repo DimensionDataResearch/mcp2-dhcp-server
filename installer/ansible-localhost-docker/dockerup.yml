@@ -1,0 +1,53 @@
+---
+- hosts: localhost
+  tasks:
+
+# Installs the DHCP Server and config files
+
+    - name: Configure mcp2-dhcp-server
+      template:
+        src: mcp2-dhcp-server.yml.j2
+        dest: /etc/mcp2-dhcp-server.yml
+        owner: root
+        group: root
+        mode: 0755
+
+
+# Installs the DHCP Server and config files
+
+    - name: Configure Cloud-config-server
+      template:
+        src: cloud-config-server.yml.j2
+        dest: /etc/cloud-config-server.yml
+        owner: root
+        group: root
+        mode: 0755
+
+
+
+    - name: Start mcp2-dhcp-server service (systemd)
+      systemd:
+        name: mcp2-dhcp-server.service
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    - name: Start cloud-config-server service (systemd)
+      systemd:
+        name: cloud-config-server.service
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+    - name: Start Apache
+      systemd:
+        name: apache2
+        enabled: yes
+        masked: no
+
+    - name: Start TFTP
+      systemd:
+        name: tftpd-hpa
+        enabled: yes
+        masked: no
+    
