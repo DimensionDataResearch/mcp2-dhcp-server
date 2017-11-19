@@ -1,0 +1,56 @@
+---
+- hosts: net-boot-service
+  tasks:
+    - name: Install mcp2-dhcp-server
+      unarchive:
+        src: "https://github.com/DimensionDataResearch/mcp2-dhcp-server/releases/download/v{{ mcp2_dhcp_server_version }}/mcp2-dhcp-server.v{{ mcp2_dhcp_server_version }}.linux-amd64.zip"
+        dest: /usr/local/bin
+        remote_src: yes
+        keep_newer: yes
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      tags:
+        - common
+
+    - name: Configure mcp2-dhcp-server
+      template:
+        src: mcp2-dhcp-server.yml.j2
+        dest: /etc/mcp2-dhcp-server.yml
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      tags:
+        - common
+
+    - name: Create mcp2-dhcp-server service (systemd)
+      copy:
+        src: mcp2-dhcp-server.service
+        dest: /lib/systemd/system/mcp2-dhcp-server.service
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      tags:
+        - common
+
+    - name: Link mcp2-dhcp-server service (systemd)
+      file:
+        src: /lib/systemd/system/mcp2-dhcp-server.service
+        dest: /etc/systemd/system/multi-user.target.wants/mcp2-dhcp-server.service
+        state: link
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      tags:
+        - common
+
+    - name: Start mcp2-dhcp-server service (systemd)
+      systemd:
+        name: mcp2-dhcp-server.service
+        enabled: yes
+        state: started
+        daemon_reload: yes
+      tags:
+        - common
+
+# tasks file for mcp2_dhcp_server

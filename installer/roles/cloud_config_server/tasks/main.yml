@@ -1,0 +1,92 @@
+---
+- hosts: net-boot-service
+  tasks:
+    - name: Install Cloud-config-server
+      unarchive:
+        src: "https://github.com/DimensionDataResearch/dd-rancheros-cloud-config/releases/download/v{{ cloud_config_server }}/cloud-config-server.v{{cloud_config_server}}.linux-amd64.zip"
+        dest: /usr/local/bin
+        remote_src: yes
+        keep_newer: yes
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      tags:
+        - rancheros
+
+    - name: Configure Cloud-config-server
+      template:
+        src: cloud-config-server.yml.j2
+        dest: /etc/cloud-config-server.yml
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      tags:
+        - rancheros
+
+    - name: Create cloud-config-server service (systemd)
+      copy:
+        src: cloud-config-server.service
+        dest: /lib/systemd/system/cloud-config-server.service
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      tags:
+        - rancheros
+
+    - name: Link cloud-config-server service (systemd)
+      file:
+        src: /lib/systemd/system/cloud-config-server.service
+        dest: /etc/systemd/system/multi-user.target.wants/cloud-config-server.service
+        state: link
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      tags:
+        - rancheros
+
+    - name: Start cloud-config-server service (systemd)
+      systemd:
+        name: cloud-config-server.service
+        enabled: yes
+        state: started
+        daemon_reload: yes
+      tags:
+        - rancheros
+
+    - name: Create Directory for RancherOS
+      file: 
+          path: /var/www/html/rancheros 
+          state: directory
+      tags:
+        - rancheros
+    
+    - name: Create Directory for RancherOS Directory for Version 1.0.4
+      file: 
+        path: /var/www/html/rancheros/{{ rancheros_version }}
+        state: directory
+      tags:
+        - rancheros
+    
+    - name: Download RancherOS Init RD
+      get_url:
+        url: https://github.com/rancher/os/releases/download/{{ rancheros_version }}/initrd
+        dest: /var/www/html/rancheros/{{ rancheros_version }}/initrd
+      tags:
+        - rancheros
+        
+    - name: Download RancherOS Init RD
+      get_url:
+        url: https://github.com/rancher/os/releases/download/{{ rancheros_version }}/vmlinuz
+        dest: /var/www/html/rancheros/{{ rancheros_version }}/vmlinuz
+      tags:
+        - rancheros
+    
+    - name: Configure RancherOS iPXE
+      template:
+        src: rancheros.ipxe.j2
+        dest: /var/www/html/rancheros.ipxe
+        owner: root
+        group: root
+        mode: 0755
+      tags:
+        - rancheros

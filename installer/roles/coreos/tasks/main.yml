@@ -1,0 +1,99 @@
+---
+- hosts: net-boot-service
+  tasks:
+    - name: Install coreos-ipxe-server
+      get_url:
+        url: "https://github.com/kelseyhightower/coreos-ipxe-server/releases/download/v{{ coreos_ipxe_server_version }}/coreos-ipxe-server-{{ coreos_ipxe_server_version }}-linux-amd64"
+        dest: /usr/local/bin/coreos-ipxe-server
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      tags:
+        - coreos
+
+    - name: Configure coreos-ipxe-server
+      template:
+        src: coreos-ipxe-server.defaults.j2
+        dest: /etc/default/coreos-ipxe-server
+      tags:
+        - coreos
+
+    - name: Create coreos-ipxe-server directories
+      file:
+        dest: "{{coreos_ipxe_server_data_dir}}/{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      with_items:
+        - configs
+        - images
+        - images/amd64-usr/310.1.0
+        - profiles
+        - sshkeys
+      tags:
+        - coreos
+
+    - name: Create default cloud-config for coreos-ipxe-server
+      copy:
+        src: development.yml
+        dest: "{{ coreos_ipxe_server_data_dir }}/configs/development.yml"
+
+    - name: Create default profile for coreos-ipxe-server
+      copy:
+        src: development.json
+        dest: "{{ coreos_ipxe_server_data_dir }}/profiles/development.json"
+      tags:
+        - coreos
+
+    - name: Copy default SSH key for coreos-ipxe-server
+      copy:
+        src: "{{ coreos_default_ssh_key_file }}"
+        dest: "{{ coreos_ipxe_server_data_dir }}/sshkeys/coreos.pub"
+      tags:
+        - coreos
+
+    - name: Download default images for coreos-ipxe-server
+      get_url:
+        url: "http://storage.core-os.net/coreos/amd64-usr/310.1.0/{{ item }}"
+        dest: "{{ coreos_ipxe_server_data_dir }}/images/amd64-usr/310.1.0/{{ item }}"
+        owner: root
+        group: root
+        mode: "u=rw,g=r,o="
+      with_items:
+        - coreos_production_pxe_image.cpio.gz
+        - coreos_production_pxe.vmlinuz
+      tags:
+        - coreos
+
+    - name: Create coreos-ipxe-server service (systemd)
+      copy:
+        src: coreos-ipxe-server.service
+        dest: /lib/systemd/system/coreos-ipxe-server.service
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      tags:
+        - coreos
+
+    - name: Link coreos-ipxe-server service (systemd)
+      file:
+        src: /lib/systemd/system/coreos-ipxe-server.service
+        dest: /etc/systemd/system/multi-user.target.wants/coreos-ipxe-server.service
+        state: link
+        owner: root
+        group: root
+        mode: "u=rwx,g=rx,o="
+      tags:
+        - coreos
+
+    - name: Start coreos-ipxe-server service (systemd)
+      systemd:
+        name: coreos-ipxe-server.service
+        enabled: yes
+        state: started
+        daemon_reload: yes
+      tags:
+        - coreos
+
+# tasks file for coreos

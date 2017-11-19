@@ -1,0 +1,41 @@
+---
+- hosts: net-boot-service
+  tasks:
+    - name: Ensure hostname set
+      hostname: name={{ inventory_hostname }}
+      when: not inventory_hostname|match('(\d{1,3}\.){3}\d{1,3}')
+    - name: Ensure hostname is in /etc/hosts
+      lineinfile:
+        dest=/etc/hosts
+        regexp="^{{ ansible_default_ipv4.address }}.+$"
+        line="{{ ansible_default_ipv4.address }} {{ ansible_fqdn }} {{ ansible_hostname }}"
+    #################
+    - copy:
+      src: ../files/scan_scsi_bus.sh
+      dest: /tmp/scan_scsi_bus.sh
+      owner: root
+      group: root
+      mode: 0644
+    - name: Rescanning for new disks host
+      shell: /tmp/scan_scsi_bus.sh
+   
+    - name: Install prerequisites
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: yes
+      with_items:
+        - unzip
+        - git
+        - build-essential
+        - liblzma-dev
+        - mkisofs
+        - tftpd-hpa
+        - apache2
+        - nfs-kernel-server
+    - name: Configure firewall
+      command: "ufw disable" # TODO: Come back and correctly configure this!
+      tags:
+        - common
+    
+      

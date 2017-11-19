@@ -1,0 +1,22 @@
+---
+- hosts: net-boot-service
+  tasks:
+    - name: Get iPXE
+      git:
+        repo: git://git.ipxe.org/ipxe.git
+        dest: /usr/local/src/ipxe
+        recursive: yes
+      tags:
+        - common
+    #Build the ipxe from source    
+    - name: Build iPXE
+      command: make bin/undionly.kpxe
+      args:
+        chdir: /usr/local/src/ipxe/src
+      tags:
+        - common
+    #Install ipxe to the base directory
+    - name: Install iPXE
+      command: cp /usr/local/src/ipxe/src/bin/undionly.kpxe /var/lib/tftpboot
+      tags:
+        - common

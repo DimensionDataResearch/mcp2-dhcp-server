@@ -8,14 +8,14 @@ coreos_ipxe_server_version: "0.3.0"
 mcp_user:     "{{ lookup('env','MCP_USER') }}"
 mcp_password: "{{ lookup('env','MCP_PASSWORD') }}"
 mcp_region:   "AU"
-mcp_vlan_id:  "3250eb64-8037-43f0-b04f-2d1de1e5cc4b"
+mcp_vlan_id:  "8ffc84af-a6c3-4f87-b2c4-72181572516e"
 
 # Server configuration
 coreos_default_ssh_key_file: "~/.ssh/id_rsa.pub" # Use the current user's SSH key
 
 # DHCP configuration
 dhcp_interface:   "ens160"
-dhcp_service_ip:  "10.2.2.10" # IP address of the DHCP / iPXE server
+dhcp_service_ip:  "10.1.5.10" # IP address of the DHCP / iPXE server
 
 # DNS configuration
 dns_enable: false
@@ -38,16 +38,16 @@ ipxe_base_url:                "http://{{ ipxe_base_address }}"
 ipxe_boot_script:             "http://{{ private_ipv4 }}/rancheros.ipxe"
 # RancherOS Specific
 
-rancheros_rsa_key:             "AAAAB3NzaC1yc2EAAAADAQABAAABAQCmNeV/W/BNuxlxJCtSmmZ+5Cg4R7qA+H0ndKEci8bke8pbxwrkga4Tmmed5bH/uaHe1s4eqn/eECHjIXmfKWyIQmQxIdjz7Z4NIUPhGRfDvvLIosVfy9WLutiDjXfo7mqeC8ctQ5bBU6VYQaXtgLSAL6KjrKOgOVqmnF0wdCtz+4VkKYGbL04vG7YqFeEGHozasOeQW3zB4a8BIvZHwSeM9bhXOqnQMdrQ5w3uggCgKB3QX6bkjThRwwpivqB6Er/jKReBTsx1qwDLLNi03VJl1vqTMpqfhq1zQJIDf2I9S+5w4sP4wfSu6EAp3sJo2a18Nmd4K18GujNxVDzKTRDf"
+rancheros_rsa_key:             "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCmNeV/W/BNuxlxJCtSmmZ+5Cg4R7qA+H0ndKEci8bke8pbxwrkga4Tmmed5bH/uaHe1s4eqn/eECHjIXmfKWyIQmQxIdjz7Z4NIUPhGRfDvvLIosVfy9WLutiDjXfo7mqeC8ctQ5bBU6VYQaXtgLSAL6KjrKOgOVqmnF0wdCtz+4VkKYGbL04vG7YqFeEGHozasOeQW3zB4a8BIvZHwSeM9bhXOqnQMdrQ5w3uggCgKB3QX6bkjThRwwpivqB6Er/jKReBTsx1qwDLLNi03VJl1vqTMpqfhq1zQJIDf2I9S+5w4sP4wfSu6EAp3sJo2a18Nmd4K18GujNxVDzKTRDf"
 rancheros_ipxe_base_address:   "http://{{ private_ipv4 }}"
 #rancheros_ipxe_boot_script:    "http://{{ private_ipv4 }}/rancheros.ipxe"
-rancheros_version:             "v1.0.4"
+rancheros_version:             "v1.1.0"
 #mcp_server_hostname:           "au09mciros1"
 # Only used for initial PXE boot, if anything goes wrong you can log in from console with rancher user
 rancherpassword:               "DevAdmin123"
 # Rancher Host add URL and Token
-rancher_agent_add_url:         "https://rancherlab.itaas-cloud.com/v1/scripts/00873662D526E62B1F97:1483142400000:k7wZDCXQmgC0kIWkJmjSAldWeqc"
-rancher_agent_version:         "rancher/agent:v1.2.2"
+rancher_agent_add_url:         "https://rancherlab.itaas-cloud.com/v1/scripts/C4A408116907E200CC82:1483142400000:gYJW3JkSwSkXJ4rVQhAruJ0Dy4"
+rancher_agent_version:         "rancher/agent:v1.2.5"
 #rancher_agent_ip:              "10.0.1.6"
 #rancher_agent_ipv6:            "2402:9900:111:1499:b:e837:ca26:7d01"
 #rancheros_ipv4_defaultgateway: "10.0.1.1"
