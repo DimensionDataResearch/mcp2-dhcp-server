@@ -1,0 +1,11 @@
+#cloud-config
+
+coreos:
+  units:
+    - name: docker.socket
+      command: start
+  oem:
+    id: coreos
+    name: CoreOS Custom
+    version-id: 310.1.0
+    home-url: https://coreos.com

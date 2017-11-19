@@ -1,0 +1,6 @@
+#!ipxe
+dhcp
+set base-url {{ rancheros_ipxe_base_address }}/rancheros/{{ rancheros_version }}
+kernel ${base-url}/vmlinuz rancher.state.dev=LABEL=RANCHER_STATE  rancher.network.interfaces.eth*.dhcp=true rancher.state.autoformat=[/dev/sda] rancher.password={{rancherpassword}} rancher.cloud_init.datasources=[url:{{ ipxe_base_url }}/cloud-config.yml]
+initrd ${base-url}/initrd
+boot
