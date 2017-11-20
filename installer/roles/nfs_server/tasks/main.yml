@@ -1,61 +1,61 @@
 ---
-- hosts: net-boot-service
-  tasks:
 #Create Partition
-    - parted:
-        device: /dev/sdb
-        number: 1
-        state: present
-      tags:
-        - rancherosnfs
+  - name: Partition Device
+    parted:
+      device: /dev/sdb
+      number: 1
+      state: present
+    tags:
+      - rancherosnfs
 #Format Drive
-    - filesystem:
-        fstype: ext4
-        dev: /dev/sdb1
-      tags:
-        - rancherosnfs
+  - name: Format Drive
+    filesystem:
+      fstype: ext4
+      dev: /dev/sdb1
+    tags:
+      - rancherosnfs
 
 # Create the Mount Point
 
-    - name: Create mountable dir
-      file: 
-        path: /mnt/ranchernfs
-        state: directory
-        mode: 777 
-        owner: root 
-        group: root
-      tags:
-        - rancherosnfs
+  - name: Create mountable dir
+    file: 
+      path: /mnt/ranchernfs
+      state: directory
+      mode: 777 
+      owner: root 
+      group: root
+    tags:
+      - rancherosnfs
 
 
 # Mount the Drive
-    - name: Mount SDB to /mnt/ranchernfs
-      mount:
-        path: /mnt/ranchernfs
-        src: /dev/sdb1
-        fstype: ext4
-        opts: rw
-        state: mounted
-      tags:
-        - rancherosnfs
+  - name: Mount SDB to /mnt/ranchernfs
+    mount:
+      path: /mnt/ranchernfs
+      src: /dev/sdb1
+      fstype: ext4
+      opts: rw
+      state: mounted
+    tags:
+      - rancherosnfs
 
-    - name: copy /etc/exports
-      template:
-        src: exports.j2
-        dest: /etc/exports
-        owner: root
-        group: root
-        mode: 755
-      tags:
-        - rancherosnfs
+  - name: copy /etc/exports
+    template:
+      src: exports.j2
+      dest: /etc/exports
+      owner: root
+      group: root
+      mode: 755
+    tags:
+      - rancherosnfs
 
-    - name: restart nfs server
-      service: 
-        name: nfs-kernel-server
-        state: restarted
-        enabled: yes
-      tags:
-        - rancherosnfs
+  - name: restart nfs server
+    service: 
+      name: nfs-kernel-server
+      state: restarted
+      enabled: yes
+    tags:
+      - rancherosnfs
 
 
 

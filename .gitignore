@@ -7,12 +7,12 @@
 _bin
 _obj
 _test
-<<<<<<< HEAD
-<<<<<<< HEAD
 vars
 environments
 CICD
 dockerfiles
+.ansible
+.kitchen
 
 =======
 >>>>>>> parent of 31fa745... Updates to include NFS on the DHCP server as an option

@@ -1,0 +1,38 @@
+---
+driver:
+  name: vagrant
+
+provisioner:
+  name: ansible_playbook
+  playbook: install-cloud-config-rancheros.yml
+  roles_path: roles
+  hosts: net-boot-service
+  env_vars: 
+    MCP_USER: <%= ENV['MCP_USER'] %>
+    MCP_PASSWORD: <%= ENV['MCP_PASSWORD'] %>
+  require_ansible_repo: true
+  ansible_verbose: true
+  ansible_verbosity: 2
+  ansible_diff: true
+
+verifier:
+  name: inspec
+  sudo_path: true
+
+platforms:
+- name: ubuntu-16.04
+  driver:
+    box: vmware-ubuntu1604
+    provider: vmware_fusion
+    gui: true
+    customize:
+      ethernet0.pcislotnumber: 33
+
+
+suites:
+ - name: ansible
+   verifier:
+    patterns:
+    - roles/common/test/common_spec.rb
+    bundler_path: '/usr/local/bin'
+    rspec_path: '/usr/local/bin'

@@ -15,7 +15,7 @@ coreos_default_ssh_key_file: "~/.ssh/id_rsa.pub" # Use the current user's SSH ke
 
 # DHCP configuration
 dhcp_interface:   "ens160"
-dhcp_service_ip:  "10.1.5.10" # IP address of the DHCP / iPXE server
+dhcp_service_ip:  "{{ ansible_default_ipv4.address }}" # IP address of the DHCP / iPXE server
 
 # DNS configuration
 dns_enable: false
@@ -24,6 +24,7 @@ dns_domain_name: mcp # "server1" -> "server1.mcp"
 dns_default_ttl: 60 # Seconds
 dns_forwarding_address: 8.8.8.8
 dns_forwarding_port: 53
+private_ipv4:                 "localhost"
 
 # PXE / iPXE configuration
 coreos_ipxe_server_data_dir:  "/opt/coreos-ipxe-server"
