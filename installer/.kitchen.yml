@@ -1,6 +1,8 @@
 ---
 driver:
   name: vagrant
+  vagrantfiles:
+      - add-drive.rb
 
 provisioner:
   name: ansible_playbook

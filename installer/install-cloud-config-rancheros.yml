@@ -6,6 +6,6 @@
     - { role: ipxe, tags: [ 'ipxe' ]}
     - { role: mcp2_dhcp_server, tags: [ 'dhcp' ]}
     - { role: cloud_config_server, tags: [ 'cloud_config'] }
-    #- { role: nfs_server, tags: [ 'nfs_server' ] }
+    - { role: nfs_server, tags: [ 'nfs_server' ] }
 
 
