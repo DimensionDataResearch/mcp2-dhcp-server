@@ -1,3 +1,13 @@
+## VS Code
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+## Visual Studio
+
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.o
 *.a
@@ -25,17 +35,20 @@ _testmain.go
 *.test
 *.prof
 
-# Mac
-.DS_Store
+## Version info
 
-# Version info
 version_info.go
 
-# Terraform
+## Terraform
+
 terraform.tfvars
 terraform.tfstate*
 .terraform.tfstate*
 
-# Ansible
+# # Ansible
 ansible.log
 *.retry
+
+## Mac
+
+.DS_Store
