@@ -3,8 +3,6 @@ A DHCP / DNS / PXE / iPXE server driven server driven by MCP 2.0 server metadata
 
 The primary purpose of this service is to enable you (via PXE / iPXE) to boot operating systems that require the use of cloud-init (e.g. RancherOS, CoreOS / Container Linux). It can also be configured to provide only simple DHCP / DNS facilities if PXE / iPXE is not required.
 
-**Note**: This is a work-in-progress; it is not production-ready yet, but should be stable enough for experimentation, prototyping, and proofs-of-concept.
-
 ## Configuration
 Create `mcp2-dhcp-server.yml`:
 
