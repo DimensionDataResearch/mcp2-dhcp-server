@@ -342,7 +342,7 @@ func (service *Service) logListenerErrors() {
 		err := <-service.listeners.Errors
 
 		if service.EnableDebugLogging {
-			log.Printf("Listener error: %#v", err.Error())
+			log.Printf("Listener error: %#v", err)
 		} else {
 			log.Printf("Listener error: %s", err.Error())
 		}
